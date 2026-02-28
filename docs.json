@@ -1,122 +1,154 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Memori",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#6366f1",
+    "light": "#818cf8",
+    "dark": "#4f46e5"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/MemoriLabs/Memori"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/MemoriLabs/Memori",
+      "discord": "https://discord.gg/abD4eGym6v"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Core Concepts",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "concepts/how-memory-works",
+              "concepts/architecture",
+              "concepts/advanced-augmentation",
+              "concepts/knowledge-graph",
+              "concepts/multi-user-support",
+              "concepts/async-patterns"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Memori Cloud",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "cloud/overview",
+              "cloud/installation",
+              "cloud/quick-start",
+              "cloud/dashboard"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Memori BYODB",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "byodb/overview",
+              "byodb/installation",
+              "byodb/quick-start",
+              "byodb/databases"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Python SDK",
             "pages": [
-              "api-reference/introduction"
+              "api/python/memori",
+              "api/python/attribution",
+              "api/python/sessions",
+              "api/python/recall",
+              "api/python/embeddings"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "TypeScript SDK",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/typescript/memori",
+              "api/typescript/attribution",
+              "api/typescript/sessions",
+              "api/typescript/recall"
+            ]
+          },
+          {
+            "group": "LLM Integrations",
+            "pages": [
+              "integrations/openai",
+              "integrations/anthropic",
+              "integrations/google-gemini",
+              "integrations/xai-grok",
+              "integrations/aws-bedrock",
+              "integrations/langchain",
+              "integrations/agno",
+              "integrations/pydantic-ai"
+            ]
+          },
+          {
+            "group": "Database Adapters",
+            "pages": [
+              "databases/sqlite",
+              "databases/postgresql",
+              "databases/mysql",
+              "databases/mongodb",
+              "databases/cockroachdb",
+              "databases/oracle",
+              "databases/oceanbase"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Use Cases",
+            "pages": [
+              "guides/chatbots",
+              "guides/ai-agents",
+              "guides/multi-agent-systems",
+              "guides/copilots"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/basic-memory",
+              "examples/multi-user",
+              "examples/streaming",
+              "examples/async-operations",
+              "examples/custom-embeddings"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/cli-usage",
+              "advanced/quota-management",
+              "advanced/performance-tuning",
+              "advanced/troubleshooting"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/overview",
+              "contributing/development-setup",
+              "contributing/guidelines"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

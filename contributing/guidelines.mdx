@@ -1,0 +1,779 @@
+---
+title: Contribution Guidelines
+description: Detailed guidelines for contributing code, documentation, and tests to Memori
+---
+
+This guide provides detailed guidelines for contributing to the Memori Python SDK. Follow these standards to ensure your contributions can be reviewed and merged efficiently.
+
+## Code Style and Standards
+
+### Python Version and Syntax
+
+Memori requires Python 3.10+ and uses modern Python features:
+
+```python
+# Good: Use modern type hints
+from typing import Optional
+
+def process_memory(
+    entity_id: str,
+    memories: list[dict],
+    threshold: float = 0.1
+) -> list[dict]:
+    return [m for m in memories if m["score"] >= threshold]
+
+# Avoid: Old-style type hints
+from typing import List, Dict
+
+def process_memory(entity_id, memories, threshold=0.1):
+    # type: (str, List[Dict], float) -> List[Dict]
+    return [m for m in memories if m["score"] >= threshold]
+```
+
+### Formatting with Ruff
+
+We use [Ruff](https://docs.astral.sh/ruff/) for formatting and linting:
+
+**Configuration** (in `pyproject.toml`):
+```toml
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+```
+
+**Usage:**
+```bash
+# Format code
+uv run ruff format .
+
+# Check linting
+uv run ruff check .
+
+# Auto-fix issues
+uv run ruff check --fix .
+```
+
+### Line Length
+
+**Maximum line length: 88 characters** (Black-compatible)
+
+```python
+# Good: Line is 88 characters or less
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": message}]
+)
+
+# Avoid: Line too long
+response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": message}])
+```
+
+### Import Organization
+
+Ruff automatically organizes imports:
+
+```python
+# Standard library imports
+import os
+import sys
+from typing import Optional
+
+# Third-party imports
+import numpy as np
+from openai import OpenAI
+
+# Local imports
+from memori._config import Config
+from memori.storage._base import BaseStorage
+```
+
+### Type Hints
+
+**All public APIs must have type hints:**
+
+```python
+# Good: Complete type hints
+from typing import Optional
+
+def recall_memories(
+    entity_id: str,
+    process_id: str,
+    limit: int = 10,
+    threshold: Optional[float] = None
+) -> list[dict]:
+    """Recall memories for entity and process.
+    
+    Args:
+        entity_id: Unique identifier for the entity
+        process_id: Unique identifier for the process
+        limit: Maximum number of memories to recall
+        threshold: Minimum similarity threshold (optional)
+    
+    Returns:
+        List of memory dictionaries
+    """
+    ...
+
+# Avoid: Missing type hints
+def recall_memories(entity_id, process_id, limit=10, threshold=None):
+    ...
+```
+
+### Docstrings
+
+**Public APIs require docstrings:**
+
+```python
+def calculate_similarity(embedding_a: np.ndarray, embedding_b: np.ndarray) -> float:
+    """Calculate cosine similarity between two embeddings.
+    
+    Args:
+        embedding_a: First embedding vector
+        embedding_b: Second embedding vector
+    
+    Returns:
+        Cosine similarity score between 0 and 1
+    
+    Raises:
+        ValueError: If embeddings have different dimensions
+    """
+    if embedding_a.shape != embedding_b.shape:
+        raise ValueError("Embeddings must have same dimensions")
+    
+    return np.dot(embedding_a, embedding_b) / (
+        np.linalg.norm(embedding_a) * np.linalg.norm(embedding_b)
+    )
+```
+
+**Internal functions can omit docstrings if the code is self-documenting:**
+
+```python
+# Good: Clear without docstring
+def _normalize_vector(vector: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vector)
+    return vector / norm if norm > 0 else vector
+```
+
+### Comments
+
+**Minimize comments - prefer self-documenting code:**
+
+```python
+# Good: Self-documenting code
+def is_memory_relevant(similarity_score: float, threshold: float) -> bool:
+    return similarity_score >= threshold
+
+# Avoid: Unnecessary comments
+def check(score, thresh):
+    # Check if score is greater than or equal to threshold
+    return score >= thresh  # Return True if relevant
+```
+
+**Use comments for complex logic or non-obvious decisions:**
+
+```python
+# Good: Explains non-obvious behavior
+def process_streaming_response(stream):
+    # Buffer chunks to avoid partial UTF-8 sequences
+    # See: https://github.com/openai/openai-python/issues/123
+    buffer = ""
+    for chunk in stream:
+        buffer += chunk.choices[0].delta.content or ""
+        if buffer.endswith((".", "!", "?")):
+            yield buffer
+            buffer = ""
+```
+
+## Testing Guidelines
+
+### Test Coverage Requirements
+
+- **New features**: >80% coverage
+- **Bug fixes**: Add test reproducing the bug
+- **Critical paths** (memory recall, LLM integration): >95% coverage
+
+### Unit Tests
+
+Fast tests using mocks, no external dependencies:
+
+```python
+import pytest
+from unittest.mock import Mock, patch
+from memori import Memori
+
+def test_attribution_sets_config():
+    """Test that attribution properly sets config values."""
+    mem = Memori()
+    mem.attribution(entity_id="user_123", process_id="agent")
+    
+    assert mem.config.entity_id == "user_123"
+    assert mem.config.process_id == "agent"
+    assert mem.config.session_id is not None
+
+def test_recall_with_empty_memories():
+    """Test recall behavior with no stored memories."""
+    mem = Memori()
+    mem.attribution(entity_id="user_123", process_id="agent")
+    
+    # Mock storage to return empty results
+    with patch.object(mem.storage, 'search', return_value=[]):
+        memories = mem.recall("test query")
+        assert memories == []
+
+@pytest.mark.parametrize("threshold,expected", [
+    (0.1, 5),
+    (0.5, 2),
+    (0.9, 0),
+])
+def test_recall_threshold_filtering(threshold, expected):
+    """Test that threshold properly filters memories."""
+    # Test with different threshold values
+    ...
+```
+
+### Integration Tests
+
+Tests with real databases and LLM APIs:
+
+```python
+import pytest
+import os
+from memori import Memori
+from openai import OpenAI
+
+@pytest.mark.integration
+def test_openai_memory_persistence():
+    """Test memory persistence with real OpenAI calls."""
+    # Skip if no API key
+    if not os.getenv("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set")
+    
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+    mem.attribution(entity_id="test_user", process_id="test_agent")
+    
+    # First interaction
+    response1 = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "My favorite color is blue."}]
+    )
+    
+    # Second interaction should recall first
+    response2 = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "What's my favorite color?"}]
+    )
+    
+    assert "blue" in response2.choices[0].message.content.lower()
+```
+
+### Test Organization
+
+```
+tests/
+├── llm/
+│   ├── clients/
+│   │   ├── oss/
+│   │   │   ├── openai/
+│   │   │   │   ├── test_sync.py       # Unit tests for sync client
+│   │   │   │   └── test_async.py      # Unit tests for async client
+│   │   │   ├── anthropic/
+│   │   │   └── google/
+├── memory/
+│   ├── test_recall.py              # Memory recall tests
+│   └── test_augmentation.py        # Augmentation tests
+├── storage/
+│   ├── adapters/
+│   └── drivers/
+├── integration/                    # Integration tests
+│   ├── providers/
+│   └── cloud/
+└── benchmarks/                     # Performance benchmarks
+```
+
+### Pytest Markers
+
+```python
+# Mark integration tests
+@pytest.mark.integration
+def test_real_api_call():
+    ...
+
+# Mark async tests
+@pytest.mark.asyncio
+async def test_async_function():
+    ...
+
+# Mark benchmarks
+@pytest.mark.benchmark
+def test_performance(benchmark):
+    benchmark(expensive_function)
+```
+
+## Pull Request Guidelines
+
+### PR Title Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+```
+feat: add support for Gemini streaming
+fix: resolve memory leak in connection pooling
+docs: update PostgreSQL setup instructions
+perf: optimize embeddings search with FAISS indexing
+refactor: simplify attribution logic
+test: add integration tests for MongoDB adapter
+```
+
+**Prefixes:**
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation changes
+- `perf:` - Performance improvements
+- `refactor:` - Code refactoring (no behavior change)
+- `test:` - Add or update tests
+- `chore:` - Maintenance tasks
+- `ci:` - CI/CD changes
+
+### PR Description Template
+
+```markdown
+## Description
+[Concise description of the changes]
+
+## Motivation
+[Why is this change needed? What problem does it solve?]
+
+## Changes
+- [Bullet point list of changes]
+- [Include what was added, modified, or removed]
+
+## Related Issues
+Closes #123
+Related to #456
+
+## Testing
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated (if applicable)
+- [ ] All tests passing locally
+- [ ] Manual testing performed
+
+## Checklist
+- [ ] Code follows project style guidelines
+- [ ] Tests added for new functionality
+- [ ] Documentation updated (if needed)
+- [ ] CHANGELOG.md updated
+- [ ] Pre-commit hooks pass
+- [ ] No breaking changes (or clearly documented)
+
+## Screenshots/Examples
+[If applicable, add screenshots or code examples]
+```
+
+### PR Size Guidelines
+
+<Accordion title="Keep PRs focused and manageable">
+
+**Ideal PR sizes:**
+- **Small** (under 100 lines): Bug fixes, documentation updates
+- **Medium** (100-500 lines): New features, refactoring
+- **Large** (500-1000 lines): Major features (consider breaking up)
+- **Extra Large** (over 1000 lines): Avoid if possible - break into smaller PRs
+
+**Tips for large changes:**
+1. Break into smaller, logical PRs
+2. Submit infrastructure changes first
+3. Add features incrementally
+4. Keep refactoring separate from new features
+
+</Accordion>
+
+### Review Process
+
+<Steps>
+
+<Step title="Submit PR">
+  Create PR with clear title and description following the template.
+</Step>
+
+<Step title="CI checks">
+  Automated checks must pass:
+  - Tests (unit and integration)
+  - Linting (Ruff)
+  - Type checking
+  - Security scans (Bandit, pip-audit)
+</Step>
+
+<Step title="Code review">
+  Maintainers will review your code and may request changes.
+</Step>
+
+<Step title="Address feedback">
+  - Respond to comments
+  - Make requested changes
+  - Push updates to your branch
+</Step>
+
+<Step title="Approval and merge">
+  Once approved, maintainers will merge your PR.
+</Step>
+
+</Steps>
+
+## CHANGELOG Updates
+
+Add an entry to `CHANGELOG.md` under the "Unreleased" section:
+
+```markdown
+## [Unreleased]
+
+### Added
+- Support for Gemini streaming API (#123)
+- MongoDB connection pooling (#124)
+
+### Fixed
+- Memory leak in PostgreSQL connection handling (#125)
+- Incorrect session timeout calculation (#126)
+
+### Changed
+- Improved embeddings search performance by 40% (#127)
+- Updated OpenAI SDK to v2.0 (#128)
+
+### Deprecated
+- Old-style configuration format (will be removed in v4.0) (#129)
+```
+
+**Categories:**
+- `Added` - New features
+- `Changed` - Changes to existing functionality
+- `Deprecated` - Soon-to-be removed features
+- `Removed` - Removed features
+- `Fixed` - Bug fixes
+- `Security` - Security improvements
+
+## Commit Guidelines
+
+### Commit Message Format
+
+```
+feat: add streaming support for Anthropic Claude
+
+- Implement async streaming handler
+- Add buffering for partial chunks
+- Update tests for streaming scenarios
+
+Closes #123
+```
+
+**Structure:**
+1. **Header**: `<type>: <short description>` (max 72 chars)
+2. **Body**: Detailed explanation (optional)
+3. **Footer**: Issue references, breaking changes
+
+### Atomic Commits
+
+Keep commits focused and atomic:
+
+```bash
+# Good: Separate concerns
+git commit -m "feat: add Gemini client implementation"
+git commit -m "test: add unit tests for Gemini client"
+git commit -m "docs: update README with Gemini example"
+
+# Avoid: Mixing unrelated changes
+git commit -m "feat: add Gemini client, fix PostgreSQL bug, update docs"
+```
+
+## Breaking Changes
+
+### Identifying Breaking Changes
+
+A breaking change is any modification that requires users to change their code:
+
+- Removing or renaming public APIs
+- Changing function signatures
+- Modifying default behavior
+- Updating minimum version requirements
+
+### Documenting Breaking Changes
+
+```markdown
+## [Unreleased]
+
+### Changed
+- **BREAKING**: `Memori.attribution()` now requires `entity_id` parameter (#130)
+  
+  **Migration:**
+  ```python
+  # Before
+  mem.attribution(process_id="agent")
+  
+  # After
+  mem.attribution(entity_id="user_123", process_id="agent")
+  ```
+```
+
+<Warning>
+**Breaking changes should be rare and well-justified.** Discuss with maintainers before introducing breaking changes.
+</Warning>
+
+## Deprecation Policy
+
+When deprecating features:
+
+1. **Add deprecation warning:**
+   ```python
+   import warnings
+   
+   def old_function():
+       warnings.warn(
+           "old_function() is deprecated and will be removed in v4.0. "
+           "Use new_function() instead.",
+           DeprecationWarning,
+           stacklevel=2
+       )
+       return new_function()
+   ```
+
+2. **Update documentation:**
+   - Mark as deprecated in docstrings
+   - Provide migration guide
+
+3. **Maintain for at least one major version**
+
+4. **Remove in next major version**
+
+## Security Guidelines
+
+### Handling Sensitive Data
+
+```python
+# Good: Never log sensitive data
+def connect_to_database(connection_string: str):
+    logger.info("Connecting to database")
+    # Don't log connection_string (contains password)
+    return psycopg2.connect(connection_string)
+
+# Avoid: Logging sensitive information
+def connect_to_database(connection_string: str):
+    logger.info(f"Connecting with: {connection_string}")  # NEVER DO THIS
+    return psycopg2.connect(connection_string)
+```
+
+### API Keys and Secrets
+
+```python
+# Good: Use environment variables
+import os
+
+api_key = os.getenv("MEMORI_API_KEY")
+if not api_key:
+    raise ValueError("MEMORI_API_KEY environment variable not set")
+
+# Avoid: Hardcoded secrets
+api_key = "sk-1234567890"  # NEVER DO THIS
+```
+
+### Dependency Security
+
+```bash
+# Run security scans before submitting PR
+uv run bandit -r memori -ll -ii
+uv run pip-audit --require-hashes --disable-pip
+```
+
+## Documentation Guidelines
+
+### Code Examples
+
+Provide complete, runnable examples:
+
+```python
+# Good: Complete example
+from memori import Memori
+from openai import OpenAI
+import os
+
+# Requires OPENAI_API_KEY environment variable
+client = OpenAI()
+mem = Memori().llm.register(client)
+
+mem.attribution(entity_id="user_123", process_id="support_agent")
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+### README Updates
+
+When adding new features:
+
+1. Update feature list
+2. Add example usage
+3. Update installation instructions (if needed)
+4. Add to table of contents
+
+### API Documentation
+
+Document all public APIs:
+
+```python
+class Memori:
+    """Main Memori SDK class for memory-augmented LLM interactions.
+    
+    The Memori class provides methods to register LLM clients, configure
+    storage backends, and manage memory attribution.
+    
+    Example:
+        ```python
+        from memori import Memori
+        from openai import OpenAI
+        
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id="user_123", process_id="agent")
+        ```
+    """
+    
+    def attribution(self, entity_id: str, process_id: str) -> "Memori":
+        """Set attribution for memory storage.
+        
+        Args:
+            entity_id: Unique identifier for the entity (user, org, etc.)
+            process_id: Unique identifier for the process (agent, workflow, etc.)
+        
+        Returns:
+            Self for method chaining
+        
+        Raises:
+            ValueError: If entity_id or process_id is empty
+        
+        Example:
+            ```python
+            mem.attribution(
+                entity_id="user_123",
+                process_id="customer_support"
+            )
+            ```
+        """
+        ...
+```
+
+## Performance Considerations
+
+### Optimization Guidelines
+
+**When to optimize:**
+
+1. **Profile first**: Don't optimize without measuring
+2. **Focus on hot paths**: Memory recall, embeddings, database queries
+3. **Maintain readability**: Don't sacrifice clarity for minor gains
+
+```python
+# Good: Readable and efficient
+def batch_process(items: list[str], batch_size: int = 100) -> list[Result]:
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i+batch_size]
+        results.extend(process_batch(batch))
+    return results
+
+# Avoid: Premature optimization that hurts readability
+def batch_process(items, batch_size=100):
+    batches = [items[i:i+batch_size] for i in range(0, len(items), batch_size)]
+    return [r for batch in batches for r in process_batch(batch)]
+```
+
+
+### Benchmarking Changes
+
+```python
+import pytest
+
+@pytest.mark.benchmark
+def test_embeddings_generation_performance(benchmark):
+    """Benchmark embeddings generation speed."""
+    from memori.embeddings import generate_embedding
+    
+    text = "This is a test sentence for benchmarking."
+    result = benchmark(generate_embedding, text)
+    
+    # Assert reasonable performance
+    assert benchmark.stats['mean'] < 0.1  # <100ms average
+```
+
+## Best Practices Checklist
+
+Before submitting your PR:
+
+- [ ] Code follows PEP 8 and project style guidelines
+- [ ] All functions have type hints
+- [ ] Public APIs have docstrings
+- [ ] Code is self-documenting (minimal comments)
+- [ ] Unit tests added for new functionality
+- [ ] Integration tests added (if applicable)
+- [ ] All tests pass locally
+- [ ] Test coverage >80% for new code
+- [ ] CHANGELOG.md updated
+- [ ] Documentation updated (if needed)
+- [ ] Pre-commit hooks pass
+- [ ] Security scans pass (Bandit, pip-audit)
+- [ ] No hardcoded secrets or sensitive data
+- [ ] Breaking changes documented with migration guide
+- [ ] Commits are atomic and well-described
+- [ ] PR description is clear and complete
+
+## Getting Help
+
+Need clarification on guidelines?
+
+<CardGroup cols={2}>
+  <Card title="Discord" icon="discord" href="https://discord.gg/abD4eGym6v">
+    Ask questions in the #contributors channel
+  </Card>
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/MemoriLabs/Memori/discussions">
+    Start a discussion for design questions
+  </Card>
+  <Card title="Code Review" icon="code-pull-request">
+    Tag maintainers in your PR for feedback
+  </Card>
+  <Card title="Email" icon="envelope" href="mailto:noc@memorilabs.ai">
+    Contact the team directly
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Setup" icon="laptop-code" href="/contributing/development-setup">
+    Set up your development environment
+  </Card>
+  <Card title="Overview" icon="home" href="/contributing/overview">
+    Back to contributing overview
+  </Card>
+  <Card title="Submit PR" icon="github" href="https://github.com/MemoriLabs/Memori/compare">
+    Create a pull request
+  </Card>
+  <Card title="View Issues" icon="list" href="https://github.com/MemoriLabs/Memori/issues">
+    Find issues to work on
+  </Card>
+</CardGroup>
+
+---
+
+Thank you for contributing to Memori! Your efforts help make AI memory accessible to everyone. 🚀

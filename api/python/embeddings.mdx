@@ -1,0 +1,442 @@
+---
+title: "Embeddings"
+description: "Text embedding API for semantic search and similarity"
+---
+
+## Overview
+
+The Embeddings API converts text into vector representations (embeddings) that capture semantic meaning. These embeddings power Memori's semantic search and memory recall capabilities.
+
+## embed_texts()
+
+Generate embeddings for one or more text inputs.
+
+### Parameters
+
+<ParamField path="texts" type="str | list[str]" required>
+  Single text string or list of text strings to embed.
+  
+  **Examples:**
+  - `"Hello world"`
+  - `["Hello world", "Goodbye world"]`
+  - `["Short text", "A much longer piece of text with more content"]`
+</ParamField>
+
+<ParamField path="async_" type="bool" default="False">
+  If `True`, returns an awaitable that runs embedding in a threadpool executor. Useful for async frameworks.
+  
+  **Note:** Parameter name is `async_` (with underscore) to avoid conflict with Python keyword.
+</ParamField>
+
+### Returns
+
+<ResponseField name="return" type="list[list[float]] | Awaitable[list[list[float]]]">
+  List of embedding vectors, one per input text. Each embedding is a list of floats.
+  
+  - **Synchronous mode** (`async_=False`): Returns `list[list[float]]`
+  - **Asynchronous mode** (`async_=True`): Returns `Awaitable[list[list[float]]]`
+  
+  The length of each embedding vector depends on the model:
+  - `all-MiniLM-L6-v2` (default): 384 dimensions
+  - Other models: varies (typically 384-1536 dimensions)
+</ResponseField>
+
+## Usage Examples
+
+### Basic Embedding
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+# Embed a single text
+embedding = mem.embed_texts("Hello world")
+print(len(embedding))       # 1 (one text)
+print(len(embedding[0]))    # 384 (embedding dimension)
+print(type(embedding[0]))   # <class 'list'>
+print(type(embedding[0][0])) # <class 'float'>
+```
+
+### Multiple Texts
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+texts = [
+    "The quick brown fox",
+    "jumps over the lazy dog",
+    "Machine learning is fascinating"
+]
+
+embeddings = mem.embed_texts(texts)
+print(len(embeddings))      # 3 (three texts)
+print(len(embeddings[0]))   # 384 (each embedding)
+
+# Access individual embeddings
+for i, text in enumerate(texts):
+    print(f"Text: {text}")
+    print(f"Embedding: {embeddings[i][:5]}...")  # Show first 5 dimensions
+```
+
+### Asynchronous Embedding
+
+```python
+import asyncio
+from memori import Memori
+
+mem = Memori()
+
+async def embed_async():
+    # Returns awaitable
+    embeddings = await mem.embed_texts(
+        ["First text", "Second text"],
+        async_=True
+    )
+    print(f"Generated {len(embeddings)} embeddings")
+    return embeddings
+
+# Run async function
+embeddings = asyncio.run(embed_async())
+print(len(embeddings))  # 2
+```
+
+### FastAPI Integration
+
+```python
+from fastapi import FastAPI
+from memori import Memori
+from pydantic import BaseModel
+
+app = FastAPI()
+mem = Memori()
+
+class EmbedRequest(BaseModel):
+    texts: list[str]
+
+class EmbedResponse(BaseModel):
+    embeddings: list[list[float]]
+    count: int
+    dimensions: int
+
+@app.post("/embed", response_model=EmbedResponse)
+async def embed_endpoint(request: EmbedRequest):
+    # Use async embedding
+    embeddings = await mem.embed_texts(request.texts, async_=True)
+    
+    return EmbedResponse(
+        embeddings=embeddings,
+        count=len(embeddings),
+        dimensions=len(embeddings[0]) if embeddings else 0
+    )
+```
+
+### Custom Embedding Model
+
+```python
+import os
+from memori import Memori
+
+# Set model via environment variable
+os.environ["MEMORI_EMBEDDINGS_MODEL"] = "all-MiniLM-L6-v2"
+mem = Memori()
+
+# Or set via config
+mem = Memori()
+mem.config.embeddings.model = "all-MiniLM-L6-v2"
+
+embeddings = mem.embed_texts("Hello world")
+```
+
+### Direct API Usage
+
+You can also use the `embed_texts` function directly:
+
+```python
+from memori.embeddings import embed_texts
+
+# Synchronous
+embeddings = embed_texts(
+    texts=["Hello", "World"],
+    model="all-MiniLM-L6-v2"
+)
+
+print(len(embeddings))  # 2
+```
+
+### Semantic Similarity
+
+```python
+import numpy as np
+from memori import Memori
+
+mem = Memori()
+
+def cosine_similarity(a, b):
+    """Calculate cosine similarity between two vectors."""
+    a = np.array(a)
+    b = np.array(b)
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+# Embed texts
+texts = [
+    "I love programming",
+    "Coding is my passion",
+    "The weather is nice today"
+]
+
+embeddings = mem.embed_texts(texts)
+
+# Calculate similarity
+sim_1_2 = cosine_similarity(embeddings[0], embeddings[1])
+sim_1_3 = cosine_similarity(embeddings[0], embeddings[2])
+
+print(f"Similarity between text 1 and 2: {sim_1_2:.3f}")  # High (similar meaning)
+print(f"Similarity between text 1 and 3: {sim_1_3:.3f}")  # Low (different topics)
+```
+
+### Batch Processing
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+def embed_large_dataset(texts: list[str], batch_size: int = 32):
+    """Embed texts in batches."""
+    all_embeddings = []
+    
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        embeddings = mem.embed_texts(batch)
+        all_embeddings.extend(embeddings)
+        
+        print(f"Processed {min(i + batch_size, len(texts))}/{len(texts)} texts")
+    
+    return all_embeddings
+
+# Process 1000 texts in batches of 32
+large_dataset = [f"Text {i}" for i in range(1000)]
+embeddings = embed_large_dataset(large_dataset, batch_size=32)
+print(f"Generated {len(embeddings)} embeddings")
+```
+
+## Advanced Usage
+
+### TEI (Text Embeddings Inference)
+
+Memori supports TEI for high-performance embedding generation:
+
+```python
+from memori.embeddings import embed_texts, TEI
+
+# Configure TEI endpoint
+tei = TEI(url="http://localhost:8080")
+
+embeddings = embed_texts(
+    texts=["Hello world"],
+    model="all-MiniLM-L6-v2",
+    tei=tei,
+    chunk_size=128
+)
+```
+
+### Format Embeddings for Database
+
+When storing embeddings in databases, use the formatting utility:
+
+```python
+from memori.embeddings import embed_texts, format_embedding_for_db
+
+embedding = embed_texts("Hello world", model="all-MiniLM-L6-v2")[0]
+
+# Format for PostgreSQL
+pg_embedding = format_embedding_for_db(embedding, dialect="postgresql")
+
+# Format for MongoDB
+mongo_embedding = format_embedding_for_db(embedding, dialect="mongodb")
+
+# Format for OceanBase
+ocean_embedding = format_embedding_for_db(embedding, dialect="oceanbase")
+```
+
+### Direct Recall API Usage
+
+The `embed_texts` function is used internally by the recall API:
+
+```python
+from memori import Memori
+
+mem = Memori()
+mem.attribution(entity_id="user-123")
+
+# This internally:
+# 1. Calls mem.embed_texts("user preferences")
+# 2. Searches for similar embeddings in storage
+# 3. Returns matching facts
+facts = mem.recall("user preferences", limit=5)
+```
+
+## Configuration
+
+### Embedding Model
+
+```python
+import os
+from memori import Memori
+
+# Via environment variable
+os.environ["MEMORI_EMBEDDINGS_MODEL"] = "all-MiniLM-L6-v2"
+mem = Memori()
+
+# Via config
+mem = Memori()
+mem.config.embeddings.model = "all-MiniLM-L6-v2"
+
+print(mem.config.embeddings.model)  # "all-MiniLM-L6-v2"
+```
+
+### Supported Models
+
+Memori uses sentence-transformers models. Popular options:
+
+- `all-MiniLM-L6-v2` (default) - 384 dimensions, fast, good quality
+- `all-mpnet-base-v2` - 768 dimensions, higher quality
+- `multi-qa-MiniLM-L6-cos-v1` - 384 dimensions, optimized for Q&A
+
+## Performance
+
+### Embedding Time
+
+Embedding performance depends on:
+- Model size (larger = slower but better quality)
+- Text length (longer = slower)
+- Number of texts (batch processing is efficient)
+- Hardware (GPU vs CPU)
+
+```python
+import time
+from memori import Memori
+
+mem = Memori()
+
+texts = [f"Sample text {i}" for i in range(100)]
+
+start = time.time()
+embeddings = mem.embed_texts(texts)
+end = time.time()
+
+print(f"Embedded {len(texts)} texts in {end - start:.2f} seconds")
+print(f"Average: {(end - start) / len(texts) * 1000:.2f} ms per text")
+```
+
+### Async for Better Performance
+
+```python
+import asyncio
+from memori import Memori
+
+mem = Memori()
+
+async def embed_multiple_batches():
+    batches = [
+        ["Text 1", "Text 2"],
+        ["Text 3", "Text 4"],
+        ["Text 5", "Text 6"]
+    ]
+    
+    # Process batches concurrently
+    tasks = [
+        mem.embed_texts(batch, async_=True)
+        for batch in batches
+    ]
+    
+    results = await asyncio.gather(*tasks)
+    return results
+
+# Run
+all_embeddings = asyncio.run(embed_multiple_batches())
+print(f"Generated {len(all_embeddings)} batches")
+```
+
+## Error Handling
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+try:
+    # Empty input
+    embeddings = mem.embed_texts([])
+    print(embeddings)  # Returns []
+    
+    # None input
+    embeddings = mem.embed_texts(None)
+except Exception as e:
+    print(f"Error: {e}")
+```
+
+## Best Practices
+
+### 1. Batch Processing
+
+Process multiple texts at once for efficiency:
+
+```python
+# Good: Batch processing
+texts = ["Text 1", "Text 2", "Text 3"]
+embeddings = mem.embed_texts(texts)
+
+# Avoid: One at a time
+embeddings = [mem.embed_texts(text) for text in texts]
+```
+
+### 2. Use Async in Web Applications
+
+```python
+# Good: Async in FastAPI/async frameworks
+embeddings = await mem.embed_texts(texts, async_=True)
+
+# Avoid: Blocking in async context
+embeddings = mem.embed_texts(texts)  # Blocks event loop
+```
+
+### 3. Choose Appropriate Model
+
+```python
+# For speed: all-MiniLM-L6-v2
+mem.config.embeddings.model = "all-MiniLM-L6-v2"
+
+# For quality: all-mpnet-base-v2
+mem.config.embeddings.model = "all-mpnet-base-v2"
+```
+
+### 4. Cache Embeddings
+
+If embedding the same texts repeatedly:
+
+```python
+from functools import lru_cache
+from memori import Memori
+
+mem = Memori()
+
+@lru_cache(maxsize=1000)
+def cached_embed(text: str) -> tuple[float, ...]:
+    """Cache embeddings for repeated texts."""
+    embedding = mem.embed_texts(text)[0]
+    return tuple(embedding)  # Tuples are hashable
+
+# Reuse cached results
+embed1 = cached_embed("Hello world")
+embed2 = cached_embed("Hello world")  # Returns cached result
+```
+
+## See Also
+
+- [Memori](/api/python/memori) - Core Memori class
+- [Recall](/api/python/recall) - Memory recall API that uses embeddings
+- [sentence-transformers](https://www.sbert.net/docs/pretrained_models.html) - Available models

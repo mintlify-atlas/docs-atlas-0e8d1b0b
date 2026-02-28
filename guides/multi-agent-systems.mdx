@@ -1,0 +1,719 @@
+---
+title: Multi-Agent Systems with Shared Memory
+description: Build coordinated multi-agent systems where specialized agents share context and collaborate through Memori's memory layer.
+---
+
+# Multi-Agent Systems with Shared Memory
+
+Modern AI applications often require multiple specialized agents working together. Memori enables seamless multi-agent coordination by providing shared memory spaces where agents can contribute knowledge and recall context from other agents.
+
+## Why Multi-Agent Memory Matters
+
+Multi-agent systems fail when agents can't share context:
+
+- **Information silos** — Each agent starts from scratch
+- **Redundant work** — Agents duplicate research and analysis
+- **Lost context** — Agent handoffs lose critical information
+- **Inconsistent responses** — Agents contradict each other
+
+Memori solves this with a shared memory layer where:
+
+- **Facts are shared** across all agents for the same entity
+- **Process attribution** tracks which agent contributed what
+- **Conversations are isolated** per agent while facts remain shared
+- **Context flows** seamlessly during agent handoffs
+
+## Memory Sharing Model
+
+Memori's multi-agent memory model uses three key concepts:
+
+```python
+mem.attribution(
+    entity_id="project_alpha",      # Shared: All agents for this entity
+    process_id="research_agent"     # Isolated: Unique per agent
+)
+```
+
+### What's Shared vs. Isolated
+
+| Data Type          | Scope                                         | Example                                    |
+| ------------------ | --------------------------------------------- | ------------------------------------------ |
+| **Facts**          | Shared across all processes for same entity   | "Uses PostgreSQL", "Located in Paris"      |
+| **Preferences**    | Shared per entity                             | "Prefers TypeScript", "Likes dark mode"    |
+| **Skills**         | Shared per entity                             | "Python developer", "AWS certified"        |
+| **Attributes**     | Isolated per process                          | "Research agent handles data analysis"     |
+| **Conversations**  | Isolated per entity + process + session       | Individual agent conversation history      |
+| **Knowledge Graph**| Shared per entity                             | Relationships and semantic connections     |
+
+## Use Case 1: Research + Analysis Pipeline
+
+Build a pipeline where a research agent gathers information and an analysis agent processes it.
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    pip install memori openai
+    ```
+  </Step>
+
+  <Step title="Set Environment Variables">
+    ```bash
+    export MEMORI_API_KEY="your-memori-api-key"
+    export OPENAI_API_KEY="your-openai-api-key"
+    ```
+  </Step>
+
+  <Step title="Create Multi-Agent Pipeline">
+    Create `multi_agent_pipeline.py`:
+
+    ```python
+    from memori import Memori
+    from openai import OpenAI
+
+    class AgentPipeline:
+        def __init__(self, project_id: str):
+            self.project_id = project_id
+        
+        def create_agent(self, process_id: str):
+            """Create an agent with its own process identity."""
+            client = OpenAI()
+            mem = Memori().llm.register(client)
+            mem.attribution(
+                entity_id=self.project_id,
+                process_id=process_id
+            )
+            return client, mem
+        
+        def research_agent(self, topic: str) -> str:
+            """Research agent gathers information."""
+            client, mem = self.create_agent("research_agent")
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a research agent. Gather comprehensive "
+                                   "information on topics. Be thorough and factual."
+                    },
+                    {"role": "user", "content": f"Research: {topic}"}
+                ]
+            )
+            return response.choices[0].message.content
+        
+        def analysis_agent(self, question: str) -> str:
+            """Analysis agent processes research findings."""
+            client, mem = self.create_agent("analysis_agent")
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an analysis agent. Process research data "
+                                   "and provide strategic insights. Build on research "
+                                   "gathered by other agents."
+                    },
+                    {"role": "user", "content": question}
+                ]
+            )
+            return response.choices[0].message.content
+
+    if __name__ == "__main__":
+        pipeline = AgentPipeline("project_alpha")
+        
+        # Step 1: Research agent gathers data
+        print("=== Research Agent: Gathering Market Data ===")
+        research_result = pipeline.research_agent(
+            "Analyze the AI infrastructure market. Focus on memory and "
+            "context management solutions. Include key players, pricing, "
+            "and market size estimates."
+        )
+        print(research_result)
+        print()
+        
+        # Step 2: Research agent gathers more data
+        print("=== Research Agent: Technical Landscape ===")
+        research_result2 = pipeline.research_agent(
+            "Research vector database technologies and semantic search "
+            "approaches for AI memory systems."
+        )
+        print(research_result2)
+        print()
+        
+        # Step 3: Analysis agent processes findings
+        print("=== Analysis Agent: Strategic Recommendations ===")
+        analysis_result = pipeline.analysis_agent(
+            "Based on the market research and technical analysis, "
+            "what strategic recommendations would you make for "
+            "positioning a new AI memory platform?"
+        )
+        print(analysis_result)
+        # Analysis agent recalls ALL research from research agent!
+    ```
+  </Step>
+
+  <Step title="Run the Pipeline">
+    ```bash
+    python multi_agent_pipeline.py
+    ```
+
+    The analysis agent automatically recalls all findings from the research agent because they share the same entity ID (`project_alpha`).
+  </Step>
+</Steps>
+
+## Use Case 2: Customer Support Agent Handoff
+
+Build a support system where specialized agents handle different issue types with shared customer context.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+class SupportSystem:
+    def __init__(self, customer_id: str):
+        self.customer_id = customer_id
+    
+    def create_agent(self, agent_type: str):
+        """Create a specialized support agent."""
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=self.customer_id,
+            process_id=f"{agent_type}_agent"
+        )
+        return client, mem
+    
+    def triage_agent(self, issue: str) -> str:
+        """Initial triage agent."""
+        client, mem = self.create_agent("triage")
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a triage agent. Assess customer issues "
+                               "and gather initial information."
+                },
+                {"role": "user", "content": issue}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def billing_agent(self, question: str) -> str:
+        """Specialized billing agent."""
+        client, mem = self.create_agent("billing")
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a billing specialist. Handle payment issues, "
+                               "invoices, and subscription questions. Use customer "
+                               "context from other agents."
+                },
+                {"role": "user", "content": question}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def technical_agent(self, issue: str) -> str:
+        """Specialized technical agent."""
+        client, mem = self.create_agent("technical")
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a technical support specialist. Resolve "
+                               "technical issues using customer context and history."
+                },
+                {"role": "user", "content": issue}
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage
+support = SupportSystem("customer_456")
+
+# Triage gathers initial context
+print("=== Triage Agent ===")
+triage_response = support.triage_agent(
+    "I can't access my account and I was just charged twice on my card."
+)
+print(triage_response)
+
+# Billing agent handles payment issue
+print("\n=== Billing Agent ===")
+billing_response = support.billing_agent(
+    "Help me with the double charge issue."
+)
+print(billing_response)
+# Billing agent recalls context from triage agent
+
+# Later: Technical agent helps with access
+print("\n=== Technical Agent ===")
+tech_response = support.technical_agent(
+    "I still can't log in to my account."
+)
+print(tech_response)
+# Technical agent knows about the customer's issues from other agents
+```
+
+## Use Case 3: Development Team Agents
+
+Build a team of agents that collaborate on software development tasks.
+
+<CodeGroup>
+
+```python {{ title: 'Code + Review + Deploy' }}
+from memori import Memori
+from openai import OpenAI
+
+class DevTeam:
+    def __init__(self, repo_id: str):
+        self.repo_id = repo_id
+    
+    def create_agent(self, role: str):
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=self.repo_id,
+            process_id=f"{role}_agent"
+        )
+        return client, mem
+    
+    def coder_agent(self, task: str) -> str:
+        """Writes code."""
+        client, mem = self.create_agent("coder")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a coding agent. Write clean, well-documented code."
+                },
+                {"role": "user", "content": task}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def reviewer_agent(self, review_request: str) -> str:
+        """Reviews code."""
+        client, mem = self.create_agent("reviewer")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a code reviewer. Provide constructive feedback "
+                               "based on team standards and previous decisions."
+                },
+                {"role": "user", "content": review_request}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def deploy_agent(self, deploy_request: str) -> str:
+        """Handles deployment."""
+        client, mem = self.create_agent("deployer")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a deployment agent. Use context from code "
+                               "and review to ensure safe deployments."
+                },
+                {"role": "user", "content": deploy_request}
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage
+team = DevTeam("repo_myapp")
+
+# Coder implements feature
+code = team.coder_agent(
+    "Implement user authentication with JWT tokens. Use bcrypt for passwords."
+)
+print("Coder:", code)
+
+# Reviewer checks the code
+review = team.reviewer_agent(
+    "Review the authentication implementation."
+)
+print("\nReviewer:", review)
+# Reviewer recalls: JWT tokens, bcrypt
+
+# Deployer prepares deployment
+deploy = team.deploy_agent(
+    "Prepare deployment plan for the authentication feature."
+)
+print("\nDeployer:", deploy)
+# Deployer knows about JWT, bcrypt, and review feedback
+```
+
+```python {{ title: 'Agno Multi-Agent' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+class AgnoTeam:
+    def __init__(self, entity_id: str):
+        self.entity_id = entity_id
+    
+    def create_agent(self, role: str, instructions: list):
+        model = OpenAIChat(id="gpt-4o-mini")
+        mem = Memori().llm.register(openai_chat=model)
+        mem.attribution(
+            entity_id=self.entity_id,
+            process_id=f"{role}_agent"
+        )
+        
+        agent = Agent(
+            model=model,
+            instructions=instructions,
+            markdown=True,
+        )
+        return agent, mem
+
+team = AgnoTeam("project_alpha")
+
+# Research agent
+researcher, mem1 = team.create_agent(
+    "researcher",
+    ["You are a research agent.", "Gather comprehensive information."]
+)
+
+# Writer agent  
+writer, mem2 = team.create_agent(
+    "writer",
+    ["You are a content writer.", "Use research from other agents."]
+)
+
+# Research
+research = researcher.run("Research AI memory systems")
+print(research.content)
+
+mem1.augmentation.wait()
+
+# Write based on research
+article = writer.run("Write an article about AI memory systems")
+print(article.content)
+# Writer recalls research findings automatically
+```
+
+</CodeGroup>
+
+## Use Case 4: Parallel Agent Execution
+
+Run multiple agents in parallel with shared memory context.
+
+```python
+import asyncio
+from memori import Memori
+from openai import AsyncOpenAI
+
+class ParallelAgents:
+    def __init__(self, project_id: str):
+        self.project_id = project_id
+    
+    async def run_agent(self, role: str, task: str) -> tuple[str, str]:
+        """Run a single agent asynchronously."""
+        client = AsyncOpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=self.project_id,
+            process_id=f"{role}_agent"
+        )
+        
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": f"You are a {role} agent."},
+                {"role": "user", "content": task}
+            ]
+        )
+        return role, response.choices[0].message.content
+    
+    async def run_parallel(self, tasks: dict[str, str]):
+        """Run multiple agents in parallel."""
+        results = await asyncio.gather(
+            *[self.run_agent(role, task) for role, task in tasks.items()]
+        )
+        return dict(results)
+
+# Usage
+async def main():
+    agents = ParallelAgents("project_alpha")
+    
+    tasks = {
+        "market_research": "Analyze the AI market landscape",
+        "competitor_analysis": "Research top 5 competitors",
+        "technical_research": "Evaluate vector database options",
+        "pricing_research": "Research pricing strategies",
+    }
+    
+    results = await agents.run_parallel(tasks)
+    
+    for role, result in results.items():
+        print(f"\n=== {role.replace('_', ' ').title()} ===")
+        print(result)
+    
+    # Now run synthesis agent that recalls all parallel research
+    synthesis_agent = ParallelAgents("project_alpha")
+    _, synthesis = await synthesis_agent.run_agent(
+        "synthesis",
+        "Synthesize all research findings into strategic recommendations."
+    )
+    print(f"\n=== Synthesis ===")
+    print(synthesis)
+    # Synthesis agent recalls findings from all 4 parallel agents!
+
+asyncio.run(main())
+```
+
+## Agent Communication Patterns
+
+<CardGroup cols={2}>
+  <Card title="Sequential Pipeline" icon="arrow-right">
+    Agents process tasks in sequence, each building on the previous agent's work.
+
+    ```python
+    # Agent 1 → Agent 2 → Agent 3
+    result1 = agent1.execute("Step 1")
+    result2 = agent2.execute("Step 2")  # Recalls result1
+    result3 = agent3.execute("Step 3")  # Recalls result1 + result2
+    ```
+  </Card>
+
+  <Card title="Parallel Execution" icon="th">
+    Multiple agents work simultaneously, then a synthesis agent combines results.
+
+    ```python
+    # Run agents in parallel
+    results = await asyncio.gather(
+        agent1.execute("Task A"),
+        agent2.execute("Task B"),
+        agent3.execute("Task C"),
+    )
+    # Synthesis agent recalls all results
+    synthesis = synthesis_agent.combine()
+    ```
+  </Card>
+
+  <Card title="Specialist Handoff" icon="hands-helping">
+    General agent triages, then hands off to specialists who share context.
+
+    ```python
+    # Triage determines specialist needed
+    triage_result = triage_agent.assess(issue)
+    
+    # Hand off to specialist
+    if issue_type == "billing":
+        specialist_result = billing_agent.handle()
+    elif issue_type == "technical":
+        specialist_result = tech_agent.handle()
+    # Specialists recall triage context
+    ```
+  </Card>
+
+  <Card title="Collaborative Team" icon="users">
+    Multiple agents collaborate on a shared goal, each contributing expertise.
+
+    ```python
+    # Each agent contributes to shared project
+    code = coder_agent.implement(feature)
+    review = reviewer_agent.review()
+    tests = tester_agent.test()
+    docs = doc_agent.document()
+    # All agents share project context
+    ```
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Descriptive Process IDs">
+    Give each agent a clear, descriptive process ID:
+
+    ```python
+    # Good: Descriptive role-based IDs
+    process_id="research_agent"
+    process_id="code_reviewer"
+    process_id="billing_specialist"
+
+    # Avoid: Generic numbered IDs
+    process_id="agent_1"
+    process_id="bot_2"
+    ```
+  </Accordion>
+
+  <Accordion title="Share Entity ID for Collaboration">
+    Use the same entity ID for agents that should share context:
+
+    ```python
+    # All agents for the same project
+    entity_id="project_alpha"
+
+    # All agents serving the same customer
+    entity_id="customer_456"
+
+    # All agents working on the same codebase
+    entity_id="repo_myapp"
+    ```
+  </Accordion>
+
+  <Accordion title="Isolate with Different Entity IDs">
+    Use different entity IDs when agents should NOT share context:
+
+    ```python
+    # Customer A's agents
+    mem.attribution(entity_id="customer_a", process_id="support")
+
+    # Customer B's agents (completely isolated)
+    mem.attribution(entity_id="customer_b", process_id="support")
+    ```
+  </Accordion>
+
+  <Accordion title="Wait for Augmentation Between Agent Handoffs">
+    Ensure memory processing completes before critical handoffs:
+
+    ```python
+    # Agent 1 completes work
+    result1 = agent1.execute("Task 1")
+    
+    # Wait for memory processing
+    mem1.augmentation.wait()
+    
+    # Now agent 2 can recall agent 1's work
+    result2 = agent2.execute("Task 2")
+    ```
+
+    This is especially important in short-lived scripts or when immediate handoff is critical.
+  </Accordion>
+</AccordionGroup>
+
+## Monitoring Multi-Agent Systems
+
+Use the Memori Dashboard to monitor agent collaboration:
+
+1. **Graph Explorer** — Visualize how facts flow between agents
+2. **Process View** — See which agent contributed which memories
+3. **Entity Timeline** — Track how context builds over time
+4. **Session History** — Debug agent handoffs and context gaps
+
+Visit [app.memorilabs.ai](https://app.memorilabs.ai) to explore your multi-agent memory graph.
+
+## Example: Complete Multi-Agent System
+
+Here's a complete example combining multiple patterns:
+
+```python
+from memori import Memori
+from openai import OpenAI
+import asyncio
+
+class ProductDevelopmentTeam:
+    """Multi-agent system for product development."""
+    
+    def __init__(self, project_id: str):
+        self.project_id = project_id
+    
+    def create_agent(self, role: str):
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=self.project_id,
+            process_id=f"{role}_agent"
+        )
+        return client, mem
+    
+    async def run_async_agent(self, role: str, task: str) -> str:
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=self.project_id,
+            process_id=f"{role}_agent"
+        )
+        # Implement async execution
+        # ...
+    
+    def product_manager(self, requirement: str) -> str:
+        client, mem = self.create_agent("product_manager")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a product manager. Define requirements."},
+                {"role": "user", "content": requirement}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def engineer(self, task: str) -> str:
+        client, mem = self.create_agent("engineer")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an engineer. Implement features based on requirements."},
+                {"role": "user", "content": task}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def qa_engineer(self, test_request: str) -> str:
+        client, mem = self.create_agent("qa_engineer")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a QA engineer. Test features thoroughly."},
+                {"role": "user", "content": test_request}
+            ]
+        )
+        return response.choices[0].message.content
+
+# Complete workflow
+team = ProductDevelopmentTeam("new_feature")
+
+# Step 1: PM defines requirements
+requirements = team.product_manager(
+    "We need a user notification system with email and in-app notifications."
+)
+print("Requirements:", requirements)
+
+# Step 2: Engineer implements
+implementation = team.engineer(
+    "Implement the notification system based on the requirements."
+)
+print("\nImplementation:", implementation)
+# Engineer recalls PM's requirements
+
+# Step 3: QA tests
+test_results = team.qa_engineer(
+    "Create test plan and test the notification system."
+)
+print("\nTest Results:", test_results)
+# QA recalls requirements AND implementation
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Agents" icon="robot" href="/guides/ai-agents">
+    Learn single-agent patterns and best practices
+  </Card>
+  <Card title="Copilot Applications" icon="code" href="/guides/copilots">
+    Build AI copilots with persistent context
+  </Card>
+  <Card title="Knowledge Graph" icon="project-diagram" href="/concepts/knowledge-graph">
+    Understand how agent memories connect
+  </Card>
+  <Card title="Multi-User Support" icon="users" href="/concepts/multi-user-support">
+    Learn about memory isolation and sharing
+  </Card>
+</CardGroup>

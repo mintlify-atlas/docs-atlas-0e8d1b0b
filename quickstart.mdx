@@ -1,80 +1,462 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with Memori in minutes - add persistent memory to your AI applications
 ---
 
-## Get started in three steps
+# Quickstart
 
-Get your documentation site running locally and make your first customization.
+Get started with Memori in just a few minutes. This guide shows you how to add persistent memory to your LLM applications using either Memori Cloud or your own database.
 
-### Step 1: Set up your local environment
+## Installation
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+First, install the Memori SDK:
+
+<CodeGroup>
+
+```bash Python
+pip install memori
+```
+
+```bash TypeScript
+npm install @memorilabs/memori
+```
+
+</CodeGroup>
+
+<Note>
+  Python requires version 3.10+. TypeScript requires Node.js 18.0.0+.
+</Note>
+
+## Choose your setup
+
+<CardGroup cols={2}>
+  <Card title="Memori Cloud" icon="cloud">
+    Zero configuration - get an API key and start building immediately
+  </Card>
+  <Card title="Bring your own database" icon="database">
+    Use your existing database infrastructure for complete control
+  </Card>
+</CardGroup>
+
+## Option 1: Memori Cloud (recommended)
+
+The fastest way to get started. Memori Cloud provides fully managed memory infrastructure with zero configuration.
+
+<Steps>
+  <Step title="Get your API key">
+    Sign up at [app.memorilabs.ai](https://app.memorilabs.ai) and get your Memori API key.
+  </Step>
+  <Step title="Set environment variables">
+    Export your Memori API key and LLM provider API key:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    export MEMORI_API_KEY="your_memori_api_key"
+    export OPENAI_API_KEY="your_openai_api_key"
+    ```
+  </Step>
+  <Step title="Run your first memory-enabled app">
+    Create and run the example below.
+  </Step>
+</Steps>
+
+<CodeGroup>
+
+```python Python
+from memori import Memori
+from openai import OpenAI
+
+# Initialize OpenAI and Memori
+client = OpenAI()
+mem = Memori().llm.register(client)
+
+# Set attribution to identify the user and process
+mem.attribution(entity_id="user_123", process_id="support_agent")
+
+# First conversation - teach the AI
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "My favorite color is blue."}]
+)
+print(response.choices[0].message.content)
+
+# Second conversation - Memori recalls automatically
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What's my favorite color?"}]
+)
+print(response.choices[0].message.content)
+# Output: Your favorite color is blue.
+```
+
+```typescript TypeScript
+import { OpenAI } from 'openai';
+import { Memori } from '@memorilabs/memori';
+
+// Initialize OpenAI and Memori
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const mem = new Memori().llm.register(client);
+
+// Set attribution to identify the user and process
+mem.attribution('user-123', 'my-app');
+
+async function main() {
+  // First conversation - teach the AI
+  const response1 = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: 'My favorite color is blue and I live in Paris.' }],
+  });
+  console.log(response1.choices[0]?.message?.content);
+
+  // Wait briefly for memory to be processed
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  // Second conversation - Memori recalls automatically
+  const response2 = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: "What's my favorite color?" }],
+  });
+  console.log(response2.choices[0]?.message?.content);
+  // Output: Your favorite color is blue.
+}
+
+main().catch(console.error);
+```
+
+</CodeGroup>
+
+<Tip>
+  Memori Cloud is free for developers with generous rate limits. Advanced Augmentation runs in the background with zero latency impact.
+</Tip>
+
+## Option 2: Bring your own database (BYODB)
+
+Use your existing database infrastructure. Memori supports PostgreSQL, MongoDB, SQLite, CockroachDB, and more.
+
+<Steps>
+  <Step title="Choose your database">
+    Memori supports PostgreSQL, MongoDB, SQLite, CockroachDB, OceanBase, Oracle, and MySQL.
+  </Step>
+  <Step title="Install database dependencies">
+    Install the required database driver for your chosen database:
+
+    ```bash Python
+    # For PostgreSQL/CockroachDB
+    pip install "memori[cockroachdb]"
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    # For MongoDB
+    pip install pymongo
+    ```
+  </Step>
+  <Step title="Set up your connection">
+    Configure Memori with your database connection.
+  </Step>
+</Steps>
 
-### Step 2: Deploy your changes
+### SQLite example
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Perfect for local development and testing:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<CodeGroup>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+```python Python
+import os
+from openai import OpenAI
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
 
-### Step 3: Go live
+# Setup OpenAI
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+# Setup SQLite database
+engine = create_engine("sqlite:///memori.db")
+Session = sessionmaker(bind=engine)
+
+# Setup Memori with SQLite
+mem = Memori(conn=Session).llm.register(client)
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.config.storage.build()
+
+# First conversation
+print("You: My favorite color is blue and I live in Paris")
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user", 
+        "content": "My favorite color is blue and I live in Paris"
+    }],
+)
+print(f"AI: {response1.choices[0].message.content}\n")
+
+# Second conversation - Memori recalls context
+print("You: What's my favorite color?")
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What's my favorite color?"}],
+)
+print(f"AI: {response2.choices[0].message.content}\n")
+
+# Third conversation
+print("You: What city do I live in?")
+response3 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What city do I live in?"}],
+)
+print(f"AI: {response3.choices[0].message.content}")
+
+# Wait for augmentation to complete
+mem.augmentation.wait()
+```
+
+</CodeGroup>
+
+### PostgreSQL example
+
+For production deployments:
+
+<CodeGroup>
+
+```python Python
+import os
+from openai import OpenAI
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Connect to PostgreSQL
+database_connection_string = os.getenv("DATABASE_CONNECTION_STRING")
+engine = create_engine(database_connection_string)
+Session = sessionmaker(bind=engine)
+
+# Setup Memori with PostgreSQL
+mem = Memori(conn=Session).llm.register(client)
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.config.storage.build()
+
+# Use as normal
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "My favorite color is blue and I live in Paris"
+    }],
+)
+print(response.choices[0].message.content)
+
+mem.augmentation.wait()
+```
+
+</CodeGroup>
+
+### MongoDB example
+
+For document-based storage:
+
+<CodeGroup>
+
+```python Python
+import os
+from openai import OpenAI
+from pymongo import MongoClient
+from memori import Memori
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Connect to MongoDB
+mongo_client = MongoClient(os.getenv("MONGODB_CONNECTION_STRING"))
+db = mongo_client["memori"]
+
+# Setup Memori with MongoDB
+mem = Memori(conn=lambda: db).llm.register(client)
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.config.storage.build()
+
+# Use as normal
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "My favorite color is blue and I live in Paris"
+    }],
+)
+print(response.choices[0].message.content)
+
+mem.augmentation.wait()
+```
+
+</CodeGroup>
+
+<Note>
+  The `mem.config.storage.build()` call creates the necessary database tables/collections on first run.
+</Note>
+
+## Understanding attribution
+
+Attribution tells Memori **who** is interacting and **what process** is handling the interaction. This is essential for memory organization.
+
+```python Python
+mem.attribution(entity_id="user_123", process_id="support_agent")
+```
+
+```typescript TypeScript
+mem.attribution('user-123', 'my-app');
+```
+
+- **entity_id**: Identifies the user, customer, or any distinct entity
+- **process_id**: Identifies your agent, workflow, or application process
+
+<Tip>
+  Without attribution, Memori cannot create memories. Always set attribution before making LLM calls.
+</Tip>
+
+## Session management
+
+Memori automatically manages sessions to group related interactions. You can also control sessions manually:
+
+<CodeGroup>
+
+```python Python
+# Start a new session
+mem.new_session()
+
+# Or restore a previous session
+session_id = mem.config.session_id
+# ... later ...
+mem.set_session(session_id)
+```
+
+```typescript TypeScript
+// Start a new session
+mem.resetSession();
+
+// Or restore a previous session
+const sessionId = mem.session.id;
+// ... later ...
+mem.setSession(sessionId);
+```
+
+</CodeGroup>
+
+## What's happening behind the scenes?
+
+When you make an LLM call with Memori registered:
+
+<Steps>
+  <Step title="Recall">
+    Memori retrieves relevant memories and automatically injects them into your prompt's system context.
+  </Step>
+  <Step title="LLM call">
+    Your LLM call executes normally with the enhanced context.
+  </Step>
+  <Step title="Persistence">
+    The conversation is persisted asynchronously in the background.
+  </Step>
+  <Step title="Augmentation">
+    Advanced augmentation extracts facts, preferences, relationships, and more - all with zero latency impact.
+  </Step>
+</Steps>
+
+## Framework integration
+
+Memori works seamlessly with popular AI frameworks:
+
+### Agno example
+
+<CodeGroup>
+
+```python Python
+import os
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
+
+# Setup database
+engine = create_engine("sqlite:///memori_agno.db")
+Session = sessionmaker(bind=engine)
+
+# Setup Agno with OpenAI
+model = OpenAIChat(id="gpt-4o-mini")
+
+# Register Memori with Agno
+mem = Memori(conn=Session).llm.register(openai_chat=model)
+mem.attribution(entity_id="customer-456", process_id="support-agent")
+mem.config.storage.build()
+
+# Create agent
+agent = Agent(
+    model=model,
+    instructions=[
+        "You are a helpful customer support agent.",
+        "Remember customer preferences and history.",
+    ],
+    markdown=True,
+)
+
+# Use the agent - memory is automatic
+response = agent.run(
+    "Hi, I'd like to order a large pepperoni pizza with extra cheese"
+)
+print(response.content)
+
+response = agent.run("Can you remind me what I just ordered?")
+print(response.content)
+
+mem.augmentation.wait()
+```
+
+</CodeGroup>
+
+## View your memories
+
+If you're using Memori Cloud, explore your memories in the dashboard:
+
+- **Dashboard**: [app.memorilabs.ai](https://app.memorilabs.ai)
+- View memories, analytics, and manage API keys
+- Test memories in the interactive playground
+
+## Managing quota
+
+Memori Advanced Augmentation is free for developers with generous rate limits.
+
+<CodeGroup>
+
+```bash Python CLI
+# Check your current quota
+python -m memori quota
+
+# Sign up for an API key
+python -m memori sign-up your@email.com
+```
+
+</CodeGroup>
+
+You can also manage your quota at [app.memorilabs.ai](https://app.memorilabs.ai).
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you have Memori running, explore more advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Memori Cloud guide" icon="cloud" href="/cloud/overview">
+    Learn about cloud-specific features and configuration
+  </Card>
+  <Card title="BYODB guide" icon="database" href="/byodb/overview">
+    Deep dive into database configuration options
+  </Card>
+  <Card title="API reference" icon="code" href="/api/python/memori">
+    Explore the complete SDK reference
+  </Card>
+  <Card title="Examples" icon="book" href="https://github.com/MemoriLabs/memori-cookbook">
+    Browse the Memori Cookbook for more examples
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Need help?
+
+- **Discord**: Join our [community](https://discord.gg/abD4eGym6v)
+- **Documentation**: [memorilabs.ai/docs](https://memorilabs.ai/docs)
+- **GitHub Issues**: [Report a bug](https://github.com/MemoriLabs/Memori/issues)

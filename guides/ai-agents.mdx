@@ -1,0 +1,578 @@
+---
+title: AI Agents with Persistent Memory
+description: Build autonomous AI agents that remember context, learn from interactions, and maintain state across tasks with Memori.
+---
+
+# AI Agents with Persistent Memory
+
+AI agents need memory to be truly useful. Without memory, agents start from scratch every time, lose context between tasks, and can't learn from experience. Memori gives agents structured, persistent memory that works across frameworks and LLM providers.
+
+## Why Agents Need Memory
+
+Autonomous agents perform multi-step tasks and make decisions over time. Memory enables:
+
+- **Contextual awareness** — Agents recall previous tasks, decisions, and outcomes
+- **Learning from experience** — Patterns, preferences, and successful strategies are remembered
+- **Task continuity** — Resume interrupted work without losing progress
+- **Multi-step reasoning** — Reference earlier steps in complex workflows
+- **Personalization** — Adapt behavior based on user preferences and history
+
+## Core Pattern: Agent Attribution
+
+Every agent needs attribution to create and recall memories:
+
+```python
+mem.attribution(
+    entity_id="project_alpha",     # What entity is the agent working on behalf of?
+    process_id="research_agent"    # What agent is this?
+)
+```
+
+- **Entity** — The user, project, or organization the agent serves
+- **Process** — The agent's identity and role
+
+Memori uses these to isolate agent memories and enable multi-agent coordination.
+
+## Use Case 1: Research Agent with Memory
+
+Build an agent that conducts research and remembers findings across sessions.
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    pip install memori openai
+    ```
+  </Step>
+
+  <Step title="Set Environment Variables">
+    ```bash
+    export MEMORI_API_KEY="your-memori-api-key"
+    export OPENAI_API_KEY="your-openai-api-key"
+    ```
+  </Step>
+
+  <Step title="Create Research Agent">
+    Create `research_agent.py`:
+
+    ```python
+    from memori import Memori
+    from openai import OpenAI
+    import json
+
+    class ResearchAgent:
+        def __init__(self, project_id: str):
+            self.client = OpenAI()
+            self.mem = Memori().llm.register(self.client)
+            
+            # Attribution links memories to this project and agent
+            self.mem.attribution(
+                entity_id=project_id,
+                process_id="research_agent"
+            )
+        
+        def research(self, topic: str) -> str:
+            """Conduct research on a topic."""
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a research agent. Analyze topics thoroughly "
+                                   "and remember key findings. Build on previous research."
+                    },
+                    {"role": "user", "content": f"Research: {topic}"}
+                ]
+            )
+            return response.choices[0].message.content
+        
+        def summarize_knowledge(self) -> str:
+            """Summarize what the agent has learned."""
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Summarize all the research topics and findings you've gathered."
+                    }
+                ]
+            )
+            return response.choices[0].message.content
+
+    if __name__ == "__main__":
+        agent = ResearchAgent("project_alpha")
+        
+        # Day 1: Research competitive landscape
+        print("=== Day 1: Competitive Analysis ===")
+        result1 = agent.research(
+            "Analyze the competitive landscape for AI memory solutions. "
+            "Focus on key players, pricing, and differentiation."
+        )
+        print(result1)
+        print()
+        
+        # Day 2: Research technical architecture
+        print("=== Day 2: Technical Research ===")
+        result2 = agent.research(
+            "Research technical architecture patterns for memory systems. "
+            "What are best practices for vector search and semantic retrieval?"
+        )
+        print(result2)
+        print()
+        
+        # Wait for memory augmentation
+        agent.mem.augmentation.wait()
+        
+        # Day 3: Summarize all findings
+        print("=== Day 3: Knowledge Summary ===")
+        summary = agent.summarize_knowledge()
+        print(summary)
+        # Agent recalls all previous research automatically
+    ```
+  </Step>
+
+  <Step title="Run the Agent">
+    ```bash
+    python research_agent.py
+    ```
+
+    The agent remembers findings from Day 1 and Day 2 when summarizing on Day 3!
+  </Step>
+</Steps>
+
+## Use Case 2: Task Planning Agent
+
+Create an agent that plans tasks, tracks progress, and learns from completed work.
+
+```python
+from memori import Memori
+from openai import OpenAI
+from typing import List, Dict
+
+class TaskAgent:
+    def __init__(self, user_id: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=user_id,
+            process_id="task_planner"
+        )
+    
+    def plan_tasks(self, goal: str) -> str:
+        """Break down a goal into actionable tasks."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a task planning agent. Break goals into clear, "
+                               "actionable tasks. Learn from past task completions."
+                },
+                {"role": "user", "content": f"Plan tasks for: {goal}"}
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def report_completion(self, task: str, outcome: str):
+        """Report a completed task and its outcome."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Task completed: {task}\nOutcome: {outcome}"
+                }
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage
+agent = TaskAgent("developer_123")
+
+# Week 1: Plan feature development
+plan = agent.plan_tasks(
+    "Build a user authentication system with email and OAuth"
+)
+print(plan)
+
+# Report progress
+agent.report_completion(
+    "Set up OAuth integration",
+    "Implemented Google and GitHub OAuth. Took 4 hours, worked smoothly."
+)
+
+agent.mem.augmentation.wait()
+
+# Week 2: Plan similar task — agent learns from experience
+plan2 = agent.plan_tasks(
+    "Add Microsoft OAuth support to authentication system"
+)
+print(plan2)
+# Agent recalls: Previous OAuth integration, time estimates, successful patterns
+```
+
+## Use Case 3: Agno Agent with Memory
+
+Build sophisticated agents using Agno framework with Memori for persistent memory.
+
+<CodeGroup>
+
+```python {{ title: 'Customer Support Agent' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(
+    entity_id="customer_456",
+    process_id="support_agent"
+)
+
+agent = Agent(
+    model=model,
+    instructions=[
+        "You are a customer support agent.",
+        "Remember customer history, preferences, and past issues.",
+        "Provide personalized, context-aware support.",
+    ],
+    markdown=True,
+)
+
+# First interaction
+response1 = agent.run(
+    "I ordered item #12345 last week but haven't received it yet."
+)
+print(response1.content)
+
+# Follow-up
+response2 = agent.run(
+    "What was my order number again?"
+)
+print(response2.content)
+# Agent recalls: Order #12345
+
+mem.augmentation.wait()
+```
+
+```python {{ title: 'Code Review Agent' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(
+    entity_id="repo_project_alpha",
+    process_id="code_reviewer"
+)
+
+agent = Agent(
+    model=model,
+    instructions=[
+        "You are a code review agent.",
+        "Remember project conventions, past issues, and team preferences.",
+        "Provide consistent, context-aware feedback.",
+    ],
+    markdown=True,
+)
+
+# Review 1: Establish conventions
+response1 = agent.run(
+    "Review this PR. Team prefers functional components and TypeScript strict mode."
+)
+print(response1.content)
+
+# Review 2: Agent remembers conventions
+response2 = agent.run(
+    "Review this new component following our team standards."
+)
+print(response2.content)
+# Agent recalls: Functional components, TypeScript strict mode
+```
+
+</CodeGroup>
+
+## Use Case 4: Multi-Step Agent Workflow
+
+Build agents that execute complex, multi-step workflows with memory of each stage.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+class WorkflowAgent:
+    def __init__(self, project_id: str, agent_name: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=project_id,
+            process_id=agent_name
+        )
+    
+    def execute_step(self, step_description: str) -> str:
+        """Execute a workflow step."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a workflow agent. Execute steps in sequence, "
+                               "referencing previous steps as needed."
+                },
+                {"role": "user", "content": step_description}
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage
+agent = WorkflowAgent("project_beta", "deployment_agent")
+
+# Step 1: Prepare deployment
+print("Step 1: Prepare")
+result1 = agent.execute_step(
+    "Prepare deployment checklist for production release. "
+    "Environment: AWS ECS, Database: PostgreSQL RDS."
+)
+print(result1)
+
+# Step 2: Verify configuration
+print("\nStep 2: Verify")
+result2 = agent.execute_step(
+    "Verify all configuration settings are correct for deployment."
+)
+print(result2)
+# Agent recalls: AWS ECS, PostgreSQL RDS from Step 1
+
+# Step 3: Execute deployment
+print("\nStep 3: Deploy")
+result3 = agent.execute_step(
+    "Execute deployment based on the prepared checklist and verified configuration."
+)
+print(result3)
+# Agent references Steps 1 and 2
+
+agent.mem.augmentation.wait()
+```
+
+## Advanced: Session Management for Agent Tasks
+
+Use sessions to group related agent tasks and maintain separate contexts.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(
+    entity_id="project_gamma",
+    process_id="data_analyst"
+)
+
+# Session 1: Analyze Q1 data
+print("=== Q1 Analysis ===")
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "Analyze Q1 sales data. Revenue: $1.2M, Growth: 15%"
+    }]
+)
+print(response.choices[0].message.content)
+
+# Start new session for Q2
+mem.new_session()
+
+print("\n=== Q2 Analysis ===")
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "Analyze Q2 sales data. Revenue: $1.5M, Growth: 25%"
+    }]
+)
+print(response2.choices[0].message.content)
+# Memori maintains separate session contexts while sharing entity-level facts
+```
+
+## Framework Integration Patterns
+
+<CardGroup cols={2}>
+  <Card title="Agno Framework" icon="robot">
+    ```python
+    from agno.agent import Agent
+    from agno.models.openai import OpenAIChat
+    from memori import Memori
+
+    model = OpenAIChat(id="gpt-4o-mini")
+    mem = Memori().llm.register(openai_chat=model)
+    mem.attribution(
+        entity_id="user_123",
+        process_id="my_agent"
+    )
+
+    agent = Agent(
+        model=model,
+        instructions=["Be helpful"],
+        markdown=True,
+    )
+
+    response = agent.run("Hello!")
+    ```
+  </Card>
+
+  <Card title="LangChain" icon="link">
+    ```python
+    from langchain_openai import ChatOpenAI
+    from memori import Memori
+
+    client = ChatOpenAI(model="gpt-4o-mini")
+    mem = Memori().llm.register(chatopenai=client)
+    mem.attribution(
+        entity_id="user_123",
+        process_id="langchain_agent"
+    )
+
+    response = client.invoke("Hello!")
+    print(response.content)
+    ```
+  </Card>
+</CardGroup>
+
+## Best Practices for AI Agents
+
+<AccordionGroup>
+  <Accordion title="Choose Meaningful Process IDs">
+    Use descriptive process IDs that reflect the agent's role:
+
+    ```python
+    # Good process IDs
+    process_id="research_agent"
+    process_id="code_reviewer"
+    process_id="data_analyst"
+    process_id="support_agent"
+
+    # Avoid generic IDs
+    process_id="agent_1"  # Not descriptive
+    process_id="bot"      # Too vague
+    ```
+  </Accordion>
+
+  <Accordion title="Use Entity ID for User/Project Context">
+    The entity ID should represent who or what the agent serves:
+
+    ```python
+    # For user-specific agents
+    entity_id="user_123"
+    entity_id="customer_jane_doe"
+
+    # For project-specific agents
+    entity_id="project_alpha"
+    entity_id="repo_myapp"
+
+    # For organization-wide agents
+    entity_id="org_acme_corp"
+    ```
+  </Accordion>
+
+  <Accordion title="Group Related Tasks with Sessions">
+    Use sessions to organize multi-step workflows:
+
+    ```python
+    # Start a new task
+    mem.new_session()
+
+    # Execute related steps
+    step1_result = agent.execute_step("Step 1")
+    step2_result = agent.execute_step("Step 2")
+    step3_result = agent.execute_step("Step 3")
+
+    # Start next task
+    mem.new_session()
+    ```
+  </Accordion>
+
+  <Accordion title="Wait for Augmentation in CLI Scripts">
+    In short-lived scripts, ensure memory processing completes:
+
+    ```python
+    # After agent completes work
+    result = agent.run("Task description")
+    print(result.content)
+
+    # Wait for memory augmentation to finish
+    mem.augmentation.wait()
+    ```
+
+    Not needed in long-running services — augmentation happens in the background.
+  </Accordion>
+</AccordionGroup>
+
+## What Agents Remember
+
+Memori's Advanced Augmentation automatically captures:
+
+| Memory Type       | Agent Benefit                                  |
+| ----------------- | ---------------------------------------------- |
+| **Facts**         | Objective information about tasks and outcomes |
+| **Preferences**   | User preferences and working styles            |
+| **Skills**        | Agent capabilities and successful patterns     |
+| **Relationships** | Connections between entities and concepts      |
+| **Attributes**    | Process-level agent configuration and roles    |
+
+All memories include vector embeddings for semantic search and retrieval.
+
+## Async Agent Patterns
+
+Build async agents for better performance:
+
+```python
+import asyncio
+from memori import Memori
+from openai import AsyncOpenAI
+
+class AsyncAgent:
+    def __init__(self, entity_id: str, process_id: str):
+        self.client = AsyncOpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=entity_id,
+            process_id=process_id
+        )
+    
+    async def execute(self, task: str) -> str:
+        response = await self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an AI agent."},
+                {"role": "user", "content": task}
+            ]
+        )
+        return response.choices[0].message.content
+
+async def main():
+    agent = AsyncAgent("user_123", "async_agent")
+    result = await agent.execute("Analyze this data...")
+    print(result)
+
+asyncio.run(main())
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multi-Agent Systems" icon="users" href="/guides/multi-agent-systems">
+    Coordinate multiple agents with shared memory
+  </Card>
+  <Card title="Chatbots" icon="comments" href="/guides/chatbots">
+    Build conversational bots with memory
+  </Card>
+  <Card title="Knowledge Graph" icon="project-diagram" href="/concepts/knowledge-graph">
+    Understand how memories connect
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="/cloud/dashboard">
+    Monitor agent memories and performance
+  </Card>
+</CardGroup>

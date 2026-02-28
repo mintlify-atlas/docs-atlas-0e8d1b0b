@@ -1,0 +1,277 @@
+---
+title: Google Gemini Integration
+description: Add persistent memory to Google Gemini models with Memori - supports sync, async, and streaming.
+---
+
+# Google Gemini Integration
+
+Memori integrates with Google Gemini through the `google-genai` SDK, automatically capturing all interactions to build persistent memory for your AI applications.
+
+## Installation
+
+```bash
+pip install memori google-genai
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+import os
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# Register the Gemini client with Memori
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="gemini_assistant")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash-exp",
+    contents="Hello! My name is Alice."
+)
+print(response.text)
+```
+
+```python {{ title: 'Async' }}
+import os
+import asyncio
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="gemini_assistant")
+
+async def main():
+    response = await client.aio.models.generate_content(
+        model="gemini-2.0-flash-exp",
+        contents="Hello! My name is Alice."
+    )
+    print(response.text)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+import os
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="gemini_assistant")
+
+for chunk in client.models.generate_content_stream(
+    model="gemini-2.0-flash-exp",
+    contents="Tell me a story"
+):
+    print(chunk.text, end="")
+```
+
+</CodeGroup>
+
+## Legacy google.generativeai SDK
+
+Memori also supports the older `google.generativeai` package:
+
+```python
+import os
+import google.generativeai as genai
+from memori import Memori
+
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.GenerativeModel("gemini-2.0-flash-exp")
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="legacy_gemini")
+
+response = client.generate_content("Hello!")
+print(response.text)
+```
+
+## System Instructions
+
+Gemini supports system-level instructions via the `systemInstruction` parameter:
+
+```python
+import os
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="dev_001", process_id="code_helper")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash-exp",
+    contents="Write a Python function to sort a list",
+    config={
+        "system_instruction": "You are an expert Python developer. Write clean, efficient code."
+    }
+)
+print(response.text)
+```
+
+## Multi-Turn Conversations
+
+Memori tracks conversation history across multiple turns:
+
+```python
+import os
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_456", process_id="chat")
+
+# First turn
+response1 = client.models.generate_content(
+    model="gemini-2.0-flash-exp",
+    contents="My favorite color is blue."
+)
+print(response1.text)
+
+# Second turn - memory is maintained
+response2 = client.models.generate_content(
+    model="gemini-2.0-flash-exp",
+    contents="What's my favorite color?"
+)
+print(response2.text)
+```
+
+## Chat Sessions
+
+For the legacy SDK, use chat sessions for multi-turn conversations:
+
+```python
+import os
+import google.generativeai as genai
+from memori import Memori
+
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.GenerativeModel("gemini-2.0-flash-exp")
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_789", process_id="chat_session")
+
+chat = client.start_chat()
+response = chat.send_message("My name is Alice.")
+print(response.text)
+
+response = chat.send_message("What's my name?")
+print(response.text)
+```
+
+## Function Calling
+
+Memori captures Gemini's function calling interactions:
+
+```python
+import os
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="functions")
+
+tools = [
+    {
+        "function_declarations": [
+            {
+                "name": "get_weather",
+                "description": "Get the current weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    },
+                    "required": ["location"]
+                }
+            }
+        ]
+    }
+]
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash-exp",
+    contents="What's the weather in Tokyo?",
+    config={"tools": tools}
+)
+print(response.text)
+```
+
+## Multimodal Support
+
+Gemini's vision capabilities work seamlessly with Memori:
+
+```python
+import os
+from google import genai
+from memori import Memori
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="vision")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash-exp",
+    contents=[
+        {"text": "What's in this image?"},
+        {"inline_data": {"mime_type": "image/jpeg", "data": image_bytes}}
+    ]
+)
+print(response.text)
+```
+
+## Supported Features
+
+| Feature                | Support | Method                                |
+| ---------------------- | ------- | ------------------------------------- |
+| **Sync Client**        | ✓       | `client.models.generate_content()`    |
+| **Async Client**       | ✓       | `client.aio.models.generate_content()` |
+| **Streaming**          | ✓       | `generate_content_stream()`           |
+| **System Instructions** | ✓       | `config.system_instruction`           |
+| **Function Calling**   | ✓       | `config.tools`                        |
+| **Vision**             | ✓       | Multi-modal content                   |
+| **Chat Sessions**      | ✓       | `start_chat()` (legacy SDK)           |
+| **Legacy SDK**         | ✓       | `google.generativeai`                 |
+
+## How It Works
+
+When you register a Gemini client with Memori:
+
+1. Memori wraps `client.models.generate_content()` and streaming methods
+2. All requests (contents, config, system instructions) are captured
+3. All responses (text, function calls, etc.) are captured
+4. Conversations are stored in your Memori memory store
+5. Original API behavior is preserved
+
+<Note>
+Memori automatically detects whether you're using the new `google-genai` SDK or the legacy `google.generativeai` SDK and adapts accordingly.
+</Note>
+
+## Model Support
+
+Memori works with all Gemini models:
+
+- **Gemini 2.0 Flash** (gemini-2.0-flash-exp)
+- **Gemini 1.5 Pro** (gemini-1.5-pro)
+- **Gemini 1.5 Flash** (gemini-1.5-flash)
+- **Gemini Pro Vision** (gemini-pro-vision)
+
+## Next Steps
+
+- Learn about [Memory Retrieval](/concepts/how-memory-works)
+- Explore [Multimodal Memory](/concepts/advanced-augmentation)
+- Compare with [OpenAI Integration](/integrations/openai)

@@ -1,0 +1,586 @@
+---
+title: 'Async Memory Operations'
+description: 'Handle asynchronous memory capture, recall, and processing'
+icon: 'bolt'
+---
+
+## Overview
+
+Memori performs memory operations asynchronously to avoid blocking your application. This guide covers async patterns and best practices.
+
+## Async LLM Calls
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from openai import AsyncOpenAI
+    from memori import Memori
+
+    async def chat_async():
+        client = AsyncOpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id="user-123", process_id="async-app")
+
+        # Make async LLM call
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "What's the weather like?"}],
+        )
+
+        print(response.choices[0].message.content)
+
+        # Give time for memory processing
+        await asyncio.sleep(1)
+
+    asyncio.run(chat_async())
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { OpenAI } from 'openai';
+    import { Memori } from 'memori';
+
+    async function chatAsync() {
+      const client = new OpenAI();
+      const mem = new Memori().llm.register(client);
+      mem.attribution('user-123', 'async-app');
+
+      // Make async LLM call
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: "What's the weather like?" }],
+      });
+
+      console.log(response.choices[0]?.message?.content);
+
+      // Give time for memory processing
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    chatAsync().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Async Recall
+
+Manually recall memories asynchronously.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from memori import Memori
+
+    async def recall_memories():
+        mem = Memori()
+        mem.attribution(entity_id="user-123")
+
+        # Note: Python recall is currently synchronous but non-blocking
+        # It runs in the background thread pool
+        facts = mem.recall("What are my preferences?")
+
+        for fact in facts:
+            print(f"- {fact['content']}")
+            print(f"  Score: {fact.get('score', 0):.2f}")
+
+    asyncio.run(recall_memories())
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { Memori } from 'memori';
+
+    async function recallMemories() {
+      const mem = new Memori();
+      mem.attribution('user-123');
+
+      // Async recall
+      const facts = await mem.recall('What are my preferences?');
+
+      facts.forEach((fact) => {
+        console.log(`- ${fact.content}`);
+        console.log(`  Score: ${fact.score?.toFixed(2)}`);
+      });
+    }
+
+    recallMemories().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Concurrent Operations
+
+Handle multiple memory operations in parallel.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from openai import AsyncOpenAI
+    from memori import Memori
+
+    async def process_multiple_users():
+        client = AsyncOpenAI()
+
+        async def handle_user(user_id: str, message: str):
+            mem = Memori().llm.register(client)
+            mem.attribution(entity_id=user_id, process_id="concurrent-app")
+
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": message}],
+            )
+
+            return {
+                "user_id": user_id,
+                "response": response.choices[0].message.content,
+            }
+
+        # Process multiple users concurrently
+        tasks = [
+            handle_user("user-1", "What's my favorite color?"),
+            handle_user("user-2", "What do I like to eat?"),
+            handle_user("user-3", "Where do I live?"),
+        ]
+
+        results = await asyncio.gather(*tasks)
+
+        for result in results:
+            print(f"{result['user_id']}: {result['response']}")
+
+        # Give time for all memory processing
+        await asyncio.sleep(2)
+
+    asyncio.run(process_multiple_users())
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { OpenAI } from 'openai';
+    import { Memori } from 'memori';
+
+    async function processMultipleUsers() {
+      const client = new OpenAI();
+
+      async function handleUser(userId: string, message: string) {
+        const mem = new Memori().llm.register(client);
+        mem.attribution(userId, 'concurrent-app');
+
+        const response = await client.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: message }],
+        });
+
+        return {
+          userId,
+          response: response.choices[0]?.message?.content,
+        };
+      }
+
+      // Process multiple users concurrently
+      const results = await Promise.all([
+        handleUser('user-1', "What's my favorite color?"),
+        handleUser('user-2', 'What do I like to eat?'),
+        handleUser('user-3', 'Where do I live?'),
+      ]);
+
+      results.forEach((result) => {
+        console.log(`${result.userId}: ${result.response}`);
+      });
+
+      // Give time for all memory processing
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    processMultipleUsers().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Waiting for Augmentation
+
+In short-lived applications (CLI tools, scripts), wait for memory processing to complete.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from openai import OpenAI
+    from memori import Memori
+
+    def main():
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id="user-123", process_id="cli-tool")
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Remember: I prefer dark mode"}],
+        )
+
+        print(response.choices[0].message.content)
+
+        # Wait for augmentation to complete before exiting
+        # This is CRITICAL for short-lived scripts
+        mem.augmentation.wait(timeout=30)  # Wait up to 30 seconds
+
+    if __name__ == "__main__":
+        main()
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { OpenAI } from 'openai';
+    import { Memori } from 'memori';
+
+    async function main() {
+      const client = new OpenAI();
+      const mem = new Memori().llm.register(client);
+      mem.attribution('user-123', 'cli-tool');
+
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'Remember: I prefer dark mode' }],
+      });
+
+      console.log(response.choices[0]?.message?.content);
+
+      // Wait for augmentation to complete before exiting
+      // This is CRITICAL for short-lived scripts
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    main().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Async Web Server
+
+In long-running servers, you don't need to wait for augmentation.
+
+<Tabs>
+  <Tab title="Python (FastAPI)">
+    ```python
+    from fastapi import FastAPI
+    from openai import AsyncOpenAI
+    from memori import Memori
+
+    app = FastAPI()
+
+    @app.post("/chat")
+    async def chat(user_id: str, message: str):
+        client = AsyncOpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id=user_id, process_id="web-server")
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}],
+        )
+
+        # No need to wait - server keeps running
+        return {"response": response.choices[0].message.content}
+
+    # Optional: Graceful shutdown
+    @app.on_event("shutdown")
+    async def shutdown():
+        # Give time for pending augmentations
+        import asyncio
+        await asyncio.sleep(5)
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    ```
+  </Tab>
+
+  <Tab title="TypeScript (Express)">
+    ```typescript
+    import express from 'express';
+    import { OpenAI } from 'openai';
+    import { Memori } from 'memori';
+
+    const app = express();
+    app.use(express.json());
+
+    app.post('/chat', async (req, res) => {
+      const { user_id, message } = req.body;
+
+      const client = new OpenAI();
+      const mem = new Memori().llm.register(client);
+      mem.attribution(user_id, 'web-server');
+
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: message }],
+      });
+
+      // No need to wait - server keeps running
+      res.json({ response: response.choices[0]?.message?.content });
+    });
+
+    // Optional: Graceful shutdown
+    process.on('SIGTERM', async () => {
+      console.log('SIGTERM received, waiting for pending operations...');
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      process.exit(0);
+    });
+
+    app.listen(3000, () => {
+      console.log('Server running on port 3000');
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Background Tasks
+
+Process memories in background tasks for better performance.
+
+<CodeGroup>
+```python Python (Celery)
+import asyncio
+from celery import Celery
+from openai import AsyncOpenAI
+from memori import Memori
+
+celery = Celery('tasks', broker='redis://localhost:6379')
+
+@celery.task
+def process_conversation(user_id: str, message: str):
+    async def _process():
+        client = AsyncOpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id=user_id, process_id="background-task")
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}],
+        )
+
+        # Wait for augmentation in background task
+        await asyncio.sleep(2)
+
+        return response.choices[0].message.content
+
+    return asyncio.run(_process())
+
+# Usage
+result = process_conversation.delay("user-123", "Hello!")
+```
+
+```typescript TypeScript (Bull)
+import Queue from 'bull';
+import { OpenAI } from 'openai';
+import { Memori } from 'memori';
+
+const conversationQueue = new Queue('conversations', 'redis://localhost:6379');
+
+conversationQueue.process(async (job) => {
+  const { userId, message } = job.data;
+
+  const client = new OpenAI();
+  const mem = new Memori().llm.register(client);
+  mem.attribution(userId, 'background-task');
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+
+  // Wait for augmentation in background task
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  return response.choices[0]?.message?.content;
+});
+
+// Usage
+conversationQueue.add({ userId: 'user-123', message: 'Hello!' });
+```
+</CodeGroup>
+
+## Custom Embeddings (Async)
+
+Generate embeddings asynchronously for better performance.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from memori import Memori
+
+    async def generate_embeddings():
+        mem = Memori()
+
+        # Generate embeddings asynchronously
+        texts = [
+            "Machine learning is fascinating",
+            "I love neural networks",
+            "Deep learning powers AI",
+        ]
+
+        # This runs in a thread pool, non-blocking
+        embeddings = mem.embed_texts(texts, async_=True)
+
+        # Wait for the result
+        results = await embeddings
+
+        print(f"Generated {len(results)} embeddings")
+        print(f"First embedding dimension: {len(results[0])}")
+
+    asyncio.run(generate_embeddings())
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    // TypeScript embeddings are always async
+    import { Memori } from 'memori';
+
+    async function generateEmbeddings() {
+      const mem = new Memori();
+
+      const texts = [
+        'Machine learning is fascinating',
+        'I love neural networks',
+        'Deep learning powers AI',
+      ];
+
+      // Generate embeddings (always async in TypeScript)
+      const embeddings = await mem.embed_texts(texts);
+
+      console.log(`Generated ${embeddings.length} embeddings`);
+      console.log(`First embedding dimension: ${embeddings[0].length}`);
+    }
+
+    generateEmbeddings().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Error Handling
+
+Handle async errors gracefully.
+
+<CodeGroup>
+```python Python
+import asyncio
+from openai import AsyncOpenAI
+from memori import Memori
+
+async def safe_chat(user_id: str, message: str):
+    try:
+        client = AsyncOpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id=user_id, process_id="error-handling")
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}],
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        print(f"Error: {e}")
+        # Memory operations continue in background even if LLM call fails
+        return None
+
+async def main():
+    result = await safe_chat("user-123", "Hello!")
+    if result:
+        print(result)
+
+asyncio.run(main())
+```
+
+```typescript TypeScript
+import { OpenAI } from 'openai';
+import { Memori } from 'memori';
+
+async function safeChat(userId: string, message: string): Promise<string | null> {
+  try {
+    const client = new OpenAI();
+    const mem = new Memori().llm.register(client);
+    mem.attribution(userId, 'error-handling');
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: message }],
+    });
+
+    return response.choices[0]?.message?.content || null;
+  } catch (e) {
+    console.error(`Error: ${e}`);
+    // Memory operations continue in background even if LLM call fails
+    return null;
+  }
+}
+
+async function main() {
+  const result = await safeChat('user-123', 'Hello!');
+  if (result) {
+    console.log(result);
+  }
+}
+
+main().catch(console.error);
+```
+</CodeGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Wait in Scripts" icon="terminal">
+    Always call `mem.augmentation.wait()` in short-lived CLI tools and scripts.
+  </Card>
+
+  <Card title="Don't Wait in Servers" icon="server">
+    Long-running servers don't need to wait - memory processing happens in background.
+  </Card>
+
+  <Card title="Parallel Operations" icon="arrows-split-up-and-left">
+    Use `Promise.all()` or `asyncio.gather()` for concurrent operations.
+  </Card>
+
+  <Card title="Handle Errors" icon="shield-halved">
+    Wrap async operations in try-catch blocks to prevent unhandled rejections.
+  </Card>
+</CardGroup>
+
+## Performance Tips
+
+<Steps>
+  <Step title="Use Async Clients">
+    Always use `AsyncOpenAI` / `AsyncAnthropic` for async applications.
+  </Step>
+
+  <Step title="Avoid Blocking Operations">
+    Memori operations are async - don't block the event loop with synchronous code.
+  </Step>
+
+  <Step title="Batch Operations">
+    Process multiple users concurrently with `Promise.all()` or `asyncio.gather()`.
+  </Step>
+
+  <Step title="Monitor Memory Usage">
+    In high-throughput apps, monitor memory usage as Memori buffers conversations.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Embeddings" icon="brain-circuit" href="/examples/custom-embeddings">
+    Use custom embedding models
+  </Card>
+  <Card title="Basic Memory" icon="brain" href="/examples/basic-memory">
+    Review basic memory operations
+  </Card>
+</CardGroup>

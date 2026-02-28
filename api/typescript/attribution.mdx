@@ -1,0 +1,295 @@
+---
+title: 'Attribution'
+description: 'Configure attribution context for memory segregation'
+---
+
+## Overview
+
+Attribution is a core concept in Memori that allows you to segregate memories by user (Entity) and workflow (Process). This ensures that the right memories are recalled in the right context.
+
+**Important:** Attribution is required for Memori to function properly. If you do not provide any attribution, Memori cannot create or recall memories for you.
+
+## Concepts
+
+Memori tracks memories at three levels:
+
+<CardGroup cols={3}>
+  <Card title="Entity" icon="user">
+    Think person, place, or thing. Typically represents an end-user in your application.
+  </Card>
+  <Card title="Process" icon="microchip">
+    Think your agent, LLM interaction, or program. Represents the specific workflow or AI assistant.
+  </Card>
+  <Card title="Session" icon="comments">
+    The current conversation thread between the entity and process.
+  </Card>
+</CardGroup>
+
+## Setting Attribution
+
+### attribution()
+
+Configures the attribution context for all subsequent Memori operations.
+
+```typescript
+memori.attribution(entityId, processId);
+```
+
+<ParamField path="entityId" type="string">
+  Unique identifier for the end-user (e.g., user GUID, email hash, or database ID). If not provided, the existing entityId is preserved.
+</ParamField>
+
+<ParamField path="processId" type="string">
+  Unique identifier for the specific workflow or agent (e.g., 'customer-support-bot', 'sales-assistant'). If not provided, the existing processId is preserved.
+</ParamField>
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+## Usage Examples
+
+### Basic Attribution
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const memori = new Memori()
+  .attribution('user-123', 'my-chat-agent')
+  .llm.register(client);
+```
+
+### Multi-User Application
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+async function handleUserMessage(userId: string, message: string) {
+  // Set attribution for this specific user
+  memori.attribution(userId, 'customer-support-agent');
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+
+  return response.choices[0].message.content;
+}
+
+// Each user gets their own memory context
+await handleUserMessage('alice@example.com', 'My favorite color is blue');
+await handleUserMessage('bob@example.com', 'My favorite color is red');
+```
+
+### Multiple Agents per User
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+const userId = 'user-123';
+
+// Sales agent conversation
+memori.attribution(userId, 'sales-agent');
+const salesResponse = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'I want to upgrade my plan' }],
+});
+
+// Support agent conversation (different context)
+memori.attribution(userId, 'support-agent');
+const supportResponse = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'I have a billing question' }],
+});
+```
+
+### Dynamic Attribution
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+async function chat(userId: string, agentType: string, message: string) {
+  // Dynamically set attribution based on runtime context
+  memori.attribution(userId, agentType);
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+
+  return response.choices[0].message.content;
+}
+
+// Usage
+await chat('user-456', 'onboarding-bot', 'Help me get started');
+await chat('user-456', 'billing-bot', 'What is my current plan?');
+```
+
+### Partial Attribution Updates
+
+You can update just the entity or just the process without affecting the other:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori();
+
+// Set both entity and process
+memori.attribution('user-123', 'agent-v1');
+
+// Update only the process (entity remains 'user-123')
+memori.attribution(undefined, 'agent-v2');
+
+// Update only the entity (process remains 'agent-v2')
+memori.attribution('user-456', undefined);
+```
+
+## Best Practices
+
+### Entity ID Selection
+
+<Tip>
+  Use stable, unique identifiers for entities. Good examples:
+  - Database user IDs (e.g., `user_12345`)
+  - UUIDs (e.g., `550e8400-e29b-41d4-a716-446655440000`)
+  - Email addresses (e.g., `alice@example.com`)
+  - Hashed values for privacy (e.g., SHA-256 hash of user email)
+</Tip>
+
+<Warning>
+  Avoid using temporary or session-based identifiers that change across user sessions, as this will fragment the user's memory context.
+</Warning>
+
+### Process ID Selection
+
+<Tip>
+  Use descriptive, consistent process IDs that represent distinct workflows:
+  - `customer-support-bot`
+  - `sales-assistant`
+  - `onboarding-agent`
+  - `technical-support`
+  - `personal-assistant-v2`
+</Tip>
+
+### Attribution Lifecycle
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+class ChatService {
+  async handleRequest(userId: string, agentId: string, message: string) {
+    // Set attribution at the beginning of each request
+    memori.attribution(userId, agentId);
+
+    // All operations will use this attribution context
+    const facts = await memori.recall(message);
+    
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: message }],
+    });
+
+    return {
+      response: response.choices[0].message.content,
+      relevantFacts: facts,
+    };
+  }
+}
+```
+
+### Privacy Considerations
+
+<Warning>
+  If you're handling sensitive user data, consider hashing entity IDs before sending them to Memori:
+
+  ```typescript
+  import crypto from 'crypto';
+
+  function hashEntityId(email: string): string {
+    return crypto.createHash('sha256').update(email).digest('hex');
+  }
+
+  const entityId = hashEntityId('user@example.com');
+  memori.attribution(entityId, 'my-agent');
+  ```
+</Warning>
+
+## Configuration Access
+
+You can also directly access and modify the attribution configuration:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori();
+
+// Direct configuration access
+memori.config.entityId = 'user-123';
+memori.config.processId = 'my-agent';
+
+// Read current attribution
+console.log(`Entity: ${memori.config.entityId}`);
+console.log(`Process: ${memori.config.processId}`);
+```
+
+<Note>
+  While you can modify `config.entityId` and `config.processId` directly, using the `attribution()` method is recommended as it supports method chaining and is more idiomatic.
+</Note>
+
+## Memory Segregation
+
+Attribution ensures proper memory segregation:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+// User A tells the sales agent their favorite color
+memori.attribution('user-a', 'sales-agent');
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'My favorite color is blue' }],
+});
+
+// User B tells the support agent their favorite color
+memori.attribution('user-b', 'support-agent');
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'My favorite color is red' }],
+});
+
+// Later, when User A asks the sales agent about their color,
+// they'll get "blue" - not "red" from User B
+memori.attribution('user-a', 'sales-agent');
+const response = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'What is my favorite color?' }],
+});
+// AI will recall: "blue"
+```
+
+## Related Documentation
+
+- [Memori Class](/api/typescript/memori) - Main SDK entry point
+- [Session Management](/api/typescript/sessions) - Managing conversation sessions
+- [Memory Recall](/api/typescript/recall) - Retrieving memories

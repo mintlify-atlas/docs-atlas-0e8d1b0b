@@ -1,0 +1,253 @@
+---
+title: "Attribution"
+description: "Memory attribution methods for tracking entities and processes"
+---
+
+## Overview
+
+Attribution in Memori allows you to associate memories with specific entities (users, customers, agents) and processes (applications, workflows). This enables you to:
+
+- Isolate memories per user or customer
+- Track memories across different applications
+- Organize memories by context or workflow
+
+## attribution()
+
+Set entity and process identifiers for memory attribution.
+
+### Parameters
+
+<ParamField path="entity_id" type="str | int | None" default="None">
+  Unique identifier for the entity. Can be a user ID, customer ID, agent ID, or any unique identifier.
+  
+  **Constraints:**
+  - Automatically converted to string
+  - Maximum length: 100 characters
+  - Raises `RuntimeError` if length exceeds 100 characters
+  
+  **Examples:**
+  - `"user-123"`
+  - `"customer-abc-456"`
+  - `"agent-support-001"`
+  - `12345` (converted to `"12345"`)
+</ParamField>
+
+<ParamField path="process_id" type="str | int | None" default="None">
+  Identifier for the process or application context. Use this to distinguish between different applications or workflows.
+  
+  **Constraints:**
+  - Automatically converted to string
+  - Maximum length: 100 characters
+  - Raises `RuntimeError` if length exceeds 100 characters
+  
+  **Examples:**
+  - `"my-app"`
+  - `"customer-support"`
+  - `"sales-agent"`
+  - `"onboarding-flow"`
+</ParamField>
+
+### Returns
+
+<ResponseField name="return" type="Memori">
+  Returns the Memori instance for method chaining
+</ResponseField>
+
+## Usage Examples
+
+### Basic Attribution
+
+```python
+from memori import Memori
+
+mem = Memori()
+mem.attribution(entity_id="user-123", process_id="my-app")
+```
+
+### Method Chaining
+
+```python
+mem = Memori().attribution(
+    entity_id="customer-456",
+    process_id="support-agent"
+).new_session()
+```
+
+### Customer Support Context
+
+```python
+from memori import Memori
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+engine = create_engine("postgresql://localhost/memori")
+Session = sessionmaker(bind=engine)
+
+mem = Memori(conn=Session)
+
+# Set attribution for a specific customer and support process
+mem.attribution(
+    entity_id="customer-789",
+    process_id="technical-support"
+)
+
+# All memories will be associated with this customer
+facts = mem.recall("What issues has this customer reported?")
+```
+
+### Multi-Tenant Application
+
+```python
+def get_memori_for_user(user_id: str, tenant_id: str):
+    mem = Memori(conn=get_db_session())
+    mem.attribution(
+        entity_id=f"{tenant_id}:{user_id}",
+        process_id="saas-platform"
+    )
+    return mem
+
+# Usage
+user_mem = get_memori_for_user("user-123", "tenant-acme")
+facts = user_mem.recall("user preferences")
+```
+
+### Numeric IDs
+
+```python
+# Numeric IDs are automatically converted to strings
+mem.attribution(
+    entity_id=12345,  # Converted to "12345"
+    process_id=67890  # Converted to "67890"
+)
+```
+
+### Updating Attribution
+
+```python
+mem = Memori()
+
+# Initial attribution
+mem.attribution(entity_id="user-123", process_id="app-1")
+
+# Update attribution for a different context
+mem.attribution(entity_id="user-456", process_id="app-2")
+
+# Update only entity_id
+mem.attribution(entity_id="user-789")
+```
+
+## Attribution and Recall
+
+When you set attribution, the `entity_id` is used to filter memories during recall:
+
+```python
+mem = Memori(conn=Session)
+mem.attribution(entity_id="user-123", process_id="my-app")
+
+# This recall only returns memories associated with "user-123"
+facts = mem.recall("What are my preferences?")
+```
+
+## Attribution and Cloud Storage
+
+When using Memori's cloud storage, attribution is sent with API requests:
+
+```python
+import os
+os.environ["MEMORI_API_KEY"] = "your-api-key"
+
+mem = Memori()  # Uses cloud storage
+mem.attribution(entity_id="user-123", process_id="my-app")
+
+# Attribution is included in cloud recall requests
+facts = mem.recall("user preferences")
+```
+
+## Best Practices
+
+### 1. Set Attribution Early
+
+Always set attribution before registering LLMs or performing recall:
+
+```python
+mem = Memori(conn=Session)
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.llm.register(openai_client)
+```
+
+### 2. Use Consistent Entity IDs
+
+Use the same `entity_id` format across your application:
+
+```python
+# Good: Consistent format
+mem.attribution(entity_id="user-123")
+mem.attribution(entity_id="user-456")
+
+# Avoid: Inconsistent formats
+mem.attribution(entity_id="user-123")
+mem.attribution(entity_id="customer_456")  # Different format
+```
+
+### 3. Use Process ID for Context
+
+Use `process_id` to distinguish between different application contexts:
+
+```python
+# Support agent
+support_mem = Memori().attribution(
+    entity_id="customer-123",
+    process_id="support-chat"
+)
+
+# Sales agent
+sales_mem = Memori().attribution(
+    entity_id="customer-123",
+    process_id="sales-inquiry"
+)
+```
+
+### 4. Validate ID Length
+
+Ensure IDs don't exceed 100 characters:
+
+```python
+def safe_attribution(mem: Memori, entity_id: str, process_id: str):
+    if len(entity_id) > 100:
+        raise ValueError("entity_id too long")
+    if len(process_id) > 100:
+        raise ValueError("process_id too long")
+    
+    mem.attribution(entity_id=entity_id, process_id=process_id)
+```
+
+## Error Handling
+
+```python
+try:
+    mem.attribution(
+        entity_id="a" * 101,  # Too long!
+        process_id="my-app"
+    )
+except RuntimeError as e:
+    print(f"Error: {e}")  # "entity_id cannot be greater than 100 characters"
+```
+
+## Internal Behavior
+
+The `attribution()` method stores IDs in the config:
+
+```python
+mem = Memori()
+mem.attribution(entity_id="user-123", process_id="my-app")
+
+# Accessible via config
+print(mem.config.entity_id)   # "user-123"
+print(mem.config.process_id)  # "my-app"
+```
+
+## See Also
+
+- [Memori](/api/python/memori) - Core Memori class
+- [Sessions](/api/python/sessions) - Session management
+- [Recall](/api/python/recall) - Memory recall API

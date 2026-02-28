@@ -1,0 +1,425 @@
+---
+title: Building Chatbots with Memory
+description: Create conversational chatbots that remember user preferences, context, and conversation history across sessions with Memori.
+---
+
+# Building Chatbots with Memory
+
+Memori transforms stateless chatbots into intelligent conversational agents that remember user preferences, past interactions, and context across sessions. No more "What's your account number?" every time — your chatbot recalls everything automatically.
+
+## Why Memory Matters for Chatbots
+
+Traditional chatbots lose context between sessions. Users must repeat themselves, and the experience feels frustrating and impersonal. Memori solves this by:
+
+- **Remembering user preferences** — favorite products, communication style, accessibility needs
+- **Recalling past conversations** — previous issues, solutions, and outcomes
+- **Building user profiles** — automatically extracting facts, preferences, and context over time
+- **Providing continuity** — seamless experience across days, weeks, or months
+
+## Core Pattern: Entity + Process Attribution
+
+Every chatbot conversation needs two IDs:
+
+- **Entity ID** — The user interacting with your bot (e.g., `user_456` or `customer_jane_doe`)
+- **Process ID** — Your chatbot's identity (e.g., `support_bot` or `sales_assistant`)
+
+```python
+mem.attribution(
+    entity_id="user_456",      # Who is this conversation with?
+    process_id="support_bot"    # Which bot is handling it?
+)
+```
+
+Memori uses these to create isolated memory spaces. User A never sees User B's memories, and your support bot maintains different context than your sales bot.
+
+## Use Case 1: Customer Support Chatbot
+
+Build a support bot that remembers customer history, preferences, and past issues.
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    pip install memori openai
+    ```
+  </Step>
+
+  <Step title="Set Environment Variables">
+    ```bash
+    export MEMORI_API_KEY="your-memori-api-key"
+    export OPENAI_API_KEY="your-openai-api-key"
+    ```
+  </Step>
+
+  <Step title="Create Your Support Bot">
+    Create a file `support_bot.py`:
+
+    ```python
+    from memori import Memori
+    from openai import OpenAI
+
+    def create_support_bot(customer_id: str):
+        """Initialize a support bot for a specific customer."""
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        
+        # Link conversations to this customer and the support bot process
+        mem.attribution(
+            entity_id=customer_id,
+            process_id="support_bot"
+        )
+        
+        return client, mem
+
+    def chat(client, user_message: str):
+        """Send a message and get a response."""
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful customer support agent. "
+                               "Remember customer preferences and history."
+                },
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.choices[0].message.content
+
+    if __name__ == "__main__":
+        # Customer first interaction
+        client, mem = create_support_bot("customer_456")
+        
+        print("Customer: I'm having trouble logging in. My username is jane_smith.")
+        response1 = chat(client, "I'm having trouble logging in. My username is jane_smith.")
+        print(f"Support: {response1}\n")
+        
+        print("Customer: Can you reset my password?")
+        response2 = chat(client, "Can you reset my password?")
+        print(f"Support: {response2}\n")
+        
+        # Wait for memory processing
+        mem.augmentation.wait()
+        
+        # Later conversation — new session, same customer
+        print("--- Customer returns 3 days later ---\n")
+        
+        client2, mem2 = create_support_bot("customer_456")
+        
+        print("Customer: I'm locked out again!")
+        response3 = chat(client2, "I'm locked out again!")
+        print(f"Support: {response3}")
+        # Memori recalls: username is jane_smith, previous login issues
+    ```
+  </Step>
+
+  <Step title="Run the Bot">
+    ```bash
+    python support_bot.py
+    ```
+
+    The bot remembers the customer's username and previous login issues, even in a completely new session!
+  </Step>
+</Steps>
+
+## Use Case 2: E-commerce Shopping Assistant
+
+Create a shopping assistant that learns user preferences and recommends products based on past interactions.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+
+# Attribution for this shopper
+mem.attribution(
+    entity_id="shopper_789",
+    process_id="shopping_assistant"
+)
+
+# First interaction: User shares preferences
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a personal shopping assistant. "
+                       "Learn user preferences and make personalized recommendations."
+        },
+        {
+            "role": "user",
+            "content": "I'm looking for a laptop. I prefer MacBooks and need 16GB RAM minimum."
+        }
+    ]
+)
+print(response.choices[0].message.content)
+
+mem.augmentation.wait()
+
+# Later interaction — Memori recalls preferences
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {
+            "role": "user",
+            "content": "Show me your latest laptop deals."
+        }
+    ]
+)
+print(response2.choices[0].message.content)
+# Memori injects: "User prefers MacBooks, needs 16GB+ RAM"
+```
+
+## Use Case 3: Conversational Chatbot with Agno
+
+Build an Agno-powered chatbot with persistent memory across conversations.
+
+<CodeGroup>
+
+```python {{ title: 'Agno Integration' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(
+    entity_id="user_123",
+    process_id="conversational_agent"
+)
+
+agent = Agent(
+    model=model,
+    instructions=[
+        "You are a friendly conversational assistant.",
+        "Remember user preferences and context from previous conversations.",
+    ],
+    markdown=True,
+)
+
+# First conversation
+print("User: I love science fiction books, especially by Philip K. Dick")
+response1 = agent.run(
+    "I love science fiction books, especially by Philip K. Dick"
+)
+print(f"Agent: {response1.content}\n")
+
+# Later conversation
+print("User: Can you recommend a book?")
+response2 = agent.run("Can you recommend a book?")
+print(f"Agent: {response2.content}")
+# Agent recalls: User loves sci-fi, especially Philip K. Dick
+
+mem.augmentation.wait()
+```
+
+```python {{ title: 'LangChain Integration' }}
+from langchain_openai import ChatOpenAI
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(
+    entity_id="user_123",
+    process_id="langchain_bot"
+)
+
+# First interaction
+response1 = client.invoke(
+    "I'm a Python developer working on FastAPI projects"
+)
+print(response1.content)
+
+# Later interaction — Memori recalls context
+response2 = client.invoke(
+    "What's the best way to handle database connections in my stack?"
+)
+print(response2.content)
+# Memori injects: "User is a Python developer using FastAPI"
+```
+
+</CodeGroup>
+
+## Advanced: Session Management
+
+Group related conversations into sessions for better context organization.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="customer_456", process_id="support_bot")
+
+# Session 1: Password reset issue
+print("Session 1: Password Reset")
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "I need to reset my password"}]
+)
+print(response.choices[0].message.content)
+
+# Start new session for a different issue
+mem.new_session()
+
+print("\nSession 2: Billing Question")
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Why was I charged twice?"}]
+)
+print(response2.choices[0].message.content)
+# Each session maintains separate conversation context
+```
+
+## Web Framework Integration
+
+<CardGroup cols={2}>
+  <Card title="FastAPI" icon="bolt">
+    ```python
+    from fastapi import FastAPI, Depends
+    from memori import Memori
+    from openai import OpenAI
+
+    app = FastAPI()
+
+    def get_chatbot(user_id: str):
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=user_id,
+            process_id="web_chatbot"
+        )
+        return client
+
+    @app.post("/chat")
+    async def chat(
+        user_id: str,
+        message: str,
+        client: OpenAI = Depends(get_chatbot)
+    ):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}]
+        )
+        return {"response": response.choices[0].message.content}
+    ```
+  </Card>
+
+  <Card title="Flask" icon="flask">
+    ```python
+    from flask import Flask, request, jsonify
+    from memori import Memori
+    from openai import OpenAI
+
+    app = Flask(__name__)
+
+    @app.route("/chat", methods=["POST"])
+    def chat():
+        data = request.json
+        user_id = data["user_id"]
+        message = data["message"]
+
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=user_id,
+            process_id="flask_chatbot"
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}]
+        )
+
+        return jsonify({
+            "response": response.choices[0].message.content
+        })
+    ```
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Set Attribution">
+    Without `entity_id` and `process_id`, Memori cannot create or recall memories. Always call `mem.attribution()` before making LLM calls.
+
+    ```python
+    # Required for memory to work
+    mem.attribution(
+        entity_id="user_123",
+        process_id="my_chatbot"
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Use Descriptive IDs">
+    Choose meaningful entity and process IDs:
+
+    - Entity: `user_{id}`, `customer_{email}`, `session_{uuid}`
+    - Process: `support_bot`, `sales_assistant`, `onboarding_agent`
+
+    This makes debugging easier and helps you understand memory patterns in the dashboard.
+  </Accordion>
+
+  <Accordion title="Handle Memory Processing in Scripts">
+    Memory augmentation runs asynchronously. In short-lived CLI scripts, call `mem.augmentation.wait()` to ensure processing completes before exit.
+
+    ```python
+    # In CLI scripts
+    response = client.chat.completions.create(...)
+    print(response.choices[0].message.content)
+    
+    mem.augmentation.wait()  # Wait for memory processing
+    ```
+
+    In long-running web servers, this is not needed — augmentation happens in the background.
+  </Accordion>
+
+  <Accordion title="Use Sessions for Conversation Grouping">
+    Group related interactions into sessions:
+
+    ```python
+    # Start a new conversation thread
+    mem.new_session()
+
+    # Or restore a previous session
+    session_id = mem.config.session_id
+    # ... later ...
+    mem.set_session(session_id)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## What Memori Remembers
+
+Memori's Advanced Augmentation automatically extracts and stores:
+
+| Memory Type      | Scope                       | Example                                  |
+| ---------------- | --------------------------- | ---------------------------------------- |
+| **Facts**        | Per entity, shared across processes | "Uses PostgreSQL for database"           |
+| **Preferences**  | Per entity                  | "Prefers dark mode", "Likes sci-fi"      |
+| **Attributes**   | Per process                 | "Support bot handles login issues"       |
+| **Skills**       | Per entity                  | "Python developer", "FastAPI expert"     |
+| **Relationships**| Per entity                  | "Works at Acme Corp", "Reports to Jane" |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Agents" icon="robot" href="/guides/ai-agents">
+    Build autonomous agents with persistent memory
+  </Card>
+  <Card title="Multi-Agent Systems" icon="users" href="/guides/multi-agent-systems">
+    Coordinate multiple agents with shared memory
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="/cloud/dashboard">
+    Explore memories in the Graph Explorer
+  </Card>
+  <Card title="Advanced Augmentation" icon="wand-magic-sparkles" href="/concepts/advanced-augmentation">
+    Learn how memory extraction works
+  </Card>
+</CardGroup>

@@ -1,0 +1,112 @@
+---
+title: OceanBase
+description: Set up Memori with OceanBase — distributed HTAP database with native vector support for AI workloads.
+---
+
+# OceanBase
+
+OceanBase is a distributed Hybrid Transactional/Analytical Processing (HTAP) database with native vector search capabilities, making it ideal for AI memory applications.
+
+## Install
+
+```bash
+pip install memori pyobvector
+```
+
+## Quick Start
+
+```python
+from memori import Memori
+from sqlalchemy import create_engine
+from sqlalchemy.dialects import registry
+from sqlalchemy.orm import sessionmaker
+
+# Register OceanBase dialect
+registry.register("mysql.oceanbase", "pyobvector.schema.dialect", "OceanBaseDialect")
+
+# Setup OceanBase
+engine = create_engine(
+    "mysql+oceanbase://user:password@localhost:2881/memori_db?charset=utf8mb4",
+    pool_pre_ping=True
+)
+SessionLocal = sessionmaker(bind=engine)
+
+mem = Memori(conn=SessionLocal)
+mem.config.storage.build()
+```
+
+## Connection Strings
+
+| Environment       | Connection String                                              |
+| ----------------- | -------------------------------------------------------------- |
+| **Local**         | `mysql+oceanbase://root:@localhost:2881/memori_db`             |
+| **With Auth**     | `mysql+oceanbase://user:pass@host:2881/memori_db`              |
+| **With charset**  | `mysql+oceanbase://user:pass@host:2881/db?charset=utf8mb4`    |
+
+## Complete Example
+
+```python
+import os
+from openai import OpenAI
+from sqlalchemy import create_engine
+from sqlalchemy.dialects import registry
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
+
+# Register OceanBase dialect
+registry.register("mysql.oceanbase", "pyobvector.schema.dialect", "OceanBaseDialect")
+
+# Setup OceanBase
+engine = create_engine(
+    os.getenv("DATABASE_CONNECTION_STRING"),
+    pool_pre_ping=True
+)
+SessionLocal = sessionmaker(bind=engine)
+
+# Setup Memori with OpenAI
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+mem = Memori(conn=SessionLocal).llm.register(client)
+mem.attribution(entity_id="user_123", process_id="my_agent")
+mem.config.storage.build()
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "My favorite color is blue and I live in Paris"}]
+)
+print(response.choices[0].message.content)
+
+mem.augmentation.wait()
+facts = mem.recall("favorite color and location")
+print(facts)
+```
+
+## Environment Variables
+
+Example `.env` configuration:
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+DATABASE_CONNECTION_STRING=mysql+oceanbase://root:@localhost:2881/memori_test?charset=utf8mb4
+```
+
+<Note>
+OceanBase's native vector support makes it particularly efficient for storing and searching embeddings, which are core to Memori's memory retrieval.
+</Note>
+
+## Why OceanBase?
+
+- **Native Vector Search**: Built-in vector indexing and similarity search
+- **Distributed HTAP**: Handles both transactional and analytical workloads
+- **High Performance**: Optimized for large-scale AI applications
+- **MySQL Compatible**: Works with standard MySQL tools and drivers
+
+## SeekDB Compatibility
+
+OceanBase setup also works with SeekDB, which is built on OceanBase:
+
+```python
+engine = create_engine(
+    "mysql+oceanbase://user:password@seekdb-host:2881/memori_db",
+    pool_pre_ping=True
+)
+```

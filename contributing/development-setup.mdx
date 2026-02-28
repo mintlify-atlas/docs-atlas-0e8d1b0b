@@ -1,0 +1,696 @@
+---
+title: Development Setup
+description: Set up your development environment for contributing to Memori
+---
+
+This guide walks you through setting up your development environment for contributing to the Memori Python SDK.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Python 3.10+** (3.12 recommended)
+- **[uv](https://github.com/astral-sh/uv)** - Fast Python package installer
+- **Docker and Docker Compose** (for integration tests)
+- **Make** (optional, for convenience commands)
+- **Git**
+
+## Quick Start (Local Development)
+
+For most contributors, local development is the fastest way to get started:
+
+<Steps>
+
+<Step title="Install uv">
+  ```bash
+  # macOS/Linux
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  
+  # Windows
+  powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+  
+  # Verify installation
+  uv --version
+  ```
+</Step>
+
+<Step title="Clone the repository">
+  ```bash
+  git clone https://github.com/MemoriLabs/Memori.git
+  cd Memori
+  ```
+  
+  Or if you've forked the repository:
+  ```bash
+  git clone https://github.com/YOUR_USERNAME/Memori.git
+  cd Memori
+  git remote add upstream https://github.com/MemoriLabs/Memori.git
+  ```
+</Step>
+
+<Step title="Install dependencies">
+  ```bash
+  # Install all dependencies including dev dependencies
+  uv sync
+  
+  # This creates a virtual environment and installs:
+  # - Core Memori dependencies
+  # - Development tools (pytest, ruff, etc.)
+  # - LLM client libraries (OpenAI, Anthropic, Google)
+  # - Database drivers (PostgreSQL, MySQL, MongoDB, etc.)
+  ```
+</Step>
+
+<Step title="Install pre-commit hooks">
+  ```bash
+  uv run pre-commit install
+  
+  # Test the hooks
+  uv run pre-commit run --all-files
+  ```
+  
+  Pre-commit hooks automatically:
+  - Format code with Ruff
+  - Check linting
+  - Validate YAML/JSON
+  - Check for secrets
+</Step>
+
+<Step title="Run tests">
+  ```bash
+  # Run unit tests (fast, no external dependencies)
+  uv run pytest
+  
+  # Run with coverage
+  uv run pytest --cov=memori
+  
+  # View HTML coverage report
+  open htmlcov/index.html  # macOS
+  xdg-open htmlcov/index.html  # Linux
+  ```
+</Step>
+
+</Steps>
+
+<Tip>
+**Success!** You're ready to start contributing. The unit tests should pass without any external dependencies.
+</Tip>
+
+## Docker Development Environment
+
+For integration testing with real databases, use our Docker environment:
+
+<Steps>
+
+<Step title="Copy environment file">
+  ```bash
+  cp .env.example .env
+  ```
+  
+  Edit `.env` and add your API keys (optional for unit tests):
+  ```bash
+  # Required for integration tests
+  OPENAI_API_KEY=sk-...
+  ANTHROPIC_API_KEY=sk-ant-...
+  GOOGLE_API_KEY=...
+  
+  # Optional: For Memori Cloud features
+  MEMORI_API_KEY=...
+  ```
+</Step>
+
+<Step title="Start development environment">
+  ```bash
+  make dev-up
+  ```
+  
+  This will:
+  - Build the Docker container with Python 3.12
+  - Install all dependencies with uv
+  - Start PostgreSQL, MySQL, and MongoDB
+  - Start Mongo Express (web UI at http://localhost:8081)
+</Step>
+
+<Step title="Enter the development container">
+  ```bash
+  make dev-shell
+  ```
+  
+  You now have a shell inside the container with all dependencies installed.
+</Step>
+
+<Step title="Initialize databases">
+  Inside the container (or via make commands):
+  ```bash
+  # PostgreSQL
+  make init-postgres
+  
+  # MySQL
+  make init-mysql
+  
+  # MongoDB
+  make init-mongodb
+  
+  # SQLite
+  make init-sqlite
+  
+  # OceanBase
+  make init-oceanbase
+  ```
+</Step>
+
+<Step title="Run tests in container">
+  ```bash
+  # Inside container
+  pytest
+  
+  # Or from host
+  make test
+  ```
+</Step>
+
+</Steps>
+
+### Docker Commands Reference
+
+```bash
+# Start environment
+make dev-up
+
+# Stop environment
+make dev-down
+
+# Enter development shell
+make dev-shell
+
+# Run tests
+make test
+
+# Format code
+make format
+
+# Check linting
+make lint
+
+# Run security scans
+make security
+
+# Clean up everything
+make clean
+
+# Complete teardown (containers, volumes, cache)
+make dev-clean
+```
+
+<Accordion title="View full Makefile reference">
+
+```makefile
+make help              # Show all available commands
+make dev-up            # Start development environment
+make dev-down          # Stop development environment
+make dev-shell         # Open shell in dev container
+make dev-build         # Rebuild dev container
+make dev-clean         # Complete teardown
+
+make test              # Run tests in container
+make lint              # Run linting
+make format            # Format code
+make security          # Run security scans
+
+make init-postgres     # Initialize PostgreSQL schema
+make init-mysql        # Initialize MySQL schema
+make init-mongodb      # Initialize MongoDB schema
+make init-sqlite       # Initialize SQLite schema
+make init-oceanbase    # Initialize OceanBase schema
+make init-oracle       # Initialize Oracle schema
+
+make clean             # Clean containers, volumes, cache
+```
+
+</Accordion>
+
+## Development Workflow
+
+### Running Tests
+
+#### Unit Tests
+
+Fast tests that use mocks and don't require external services:
+
+```bash
+# Run all unit tests
+uv run pytest
+
+# Run specific test file
+uv run pytest tests/memory/test_recall.py
+
+# Run specific test
+uv run pytest tests/memory/test_recall.py::test_similarity_search
+
+# Run with verbose output
+uv run pytest -v
+
+# Run with coverage
+uv run pytest --cov=memori --cov-report=html
+```
+
+#### Integration Tests
+
+Tests that require real databases and LLM API keys:
+
+```bash
+# Set test mode and API keys
+export MEMORI_TEST_MODE=1
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...
+
+# Initialize database schema
+make init-postgres  # or your preferred database
+
+# Run all integration tests
+uv run pytest tests/integration/ -v -m integration
+
+# Run specific provider tests
+uv run pytest tests/integration/providers/test_openai.py
+
+# Run specific integration test file
+MEMORI_TEST_MODE=1 uv run python tests/llm/clients/oss/openai/sync.py
+```
+
+<Warning>
+Integration tests make real API calls and will consume API credits. Use test API keys if available.
+</Warning>
+
+### Code Formatting and Linting
+
+We use [Ruff](https://docs.astral.sh/ruff/) for both linting and formatting:
+
+```bash
+# Format code (in-place)
+uv run ruff format .
+
+# Check linting
+uv run ruff check .
+
+# Auto-fix linting issues
+uv run ruff check --fix .
+
+# Check specific file
+uv run ruff check memori/llm/clients/openai.py
+```
+
+<Tip>
+**Pro tip:** Install the Ruff extension for your IDE (VS Code, PyCharm, etc.) for real-time linting and formatting.
+</Tip>
+
+### Security Scanning
+
+Run security scans before submitting PRs:
+
+```bash
+# Bandit - security issues scanner
+uv run bandit -r memori -ll -ii
+
+# pip-audit - check for vulnerable dependencies
+uv run pip-audit --require-hashes --disable-pip || true
+
+# Or use make command
+make security
+```
+
+### Pre-commit Hooks
+
+Pre-commit hooks run automatically before each commit:
+
+```bash
+# Install hooks (one-time setup)
+uv run pre-commit install
+
+# Run manually on all files
+uv run pre-commit run --all-files
+
+# Update hooks to latest versions
+uv run pre-commit autoupdate
+
+# Skip hooks (not recommended)
+git commit --no-verify
+```
+
+## IDE Setup
+
+### Visual Studio Code
+
+Recommended extensions:
+
+```json
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "tamasfe.even-better-toml"
+  ]
+}
+```
+
+Settings (`.vscode/settings.json`):
+
+```json
+{
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "editor.formatOnSave": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll": true,
+      "source.organizeImports": true
+    }
+  },
+  "ruff.lint.args": ["--config=pyproject.toml"],
+  "ruff.format.args": ["--config=pyproject.toml"]
+}
+```
+
+### PyCharm
+
+1. **Configure Python interpreter:**
+   - File → Settings → Project → Python Interpreter
+   - Select the virtual environment created by `uv` (`.venv`)
+
+2. **Configure Ruff:**
+   - File → Settings → Tools → External Tools
+   - Add Ruff for formatting and linting
+
+3. **Configure pytest:**
+   - File → Settings → Tools → Python Integrated Tools
+   - Set default test runner to pytest
+
+### Vim/Neovim
+
+Use ALE or coc.nvim with Ruff:
+
+```vim
+" ALE configuration
+let g:ale_linters = {'python': ['ruff']}
+let g:ale_fixers = {'python': ['ruff']}
+let g:ale_fix_on_save = 1
+
+" Or with coc.nvim
+" Install coc-pyright and configure ruff
+```
+
+## Project Structure Deep Dive
+
+### Core Components
+
+```
+memori/
+├── __init__.py          # Main Memori class, public API
+├── __main__.py          # CLI entry point
+├── _cli.py              # CLI implementation
+├── _config.py           # Configuration management
+├── _exceptions.py       # Custom exceptions
+├── _logging.py          # Logging utilities
+├── _network.py          # API client
+├── _setup.py            # Setup utilities
+├── _utils.py            # General utilities
+└── py.typed             # PEP 561 type marker
+```
+
+### LLM Integrations
+
+```
+memori/llm/
+├── clients/
+│   ├── oss/              # Open source/commercial LLM providers
+│   │   ├── anthropic/     # Claude integration
+│   │   ├── google/        # Gemini integration
+│   │   ├── openai/        # OpenAI integration
+│   │   └── xai/           # Grok integration
+│   └── cloud/            # Cloud provider integrations
+│       └── bedrock/       # AWS Bedrock
+└── frameworks/
+    ├── agno/             # Agno framework
+    └── langchain/        # LangChain integration
+```
+
+### Memory System
+
+```
+memori/memory/
+├── augmentation/
+│   └── augmentations/
+│       └── memori/        # Advanced Augmentation logic
+└── recall/
+    └── ...                # Memory recall implementation
+```
+
+### Storage Layer
+
+```
+memori/storage/
+├── adapters/
+│   ├── dbapi/            # DB-API 2.0 adapter
+│   ├── django/           # Django ORM adapter
+│   ├── mongodb/          # MongoDB adapter
+│   └── sqlalchemy/       # SQLAlchemy adapter
+├── drivers/
+│   ├── mongodb/          # MongoDB driver
+│   ├── mysql/            # MySQL driver
+│   ├── oceanbase/        # OceanBase driver
+│   ├── oracle/           # Oracle driver
+│   ├── postgresql/       # PostgreSQL driver
+│   └── sqlite/           # SQLite driver
+├── cockroachdb/
+│   └── _cluster_manager.py  # CockroachDB cluster management
+├── migrations/          # Database migrations
+├── _base.py             # Base storage class
+├── _builder.py          # Schema builder
+├── _connection.py       # Connection management
+└── _manager.py          # Storage manager
+```
+
+## Common Development Tasks
+
+### Adding a New LLM Provider
+
+<Steps>
+
+<Step title="Create provider directory">
+  ```bash
+  mkdir -p memori/llm/clients/oss/newprovider
+  touch memori/llm/clients/oss/newprovider/__init__.py
+  ```
+</Step>
+
+<Step title="Implement client wrapper">
+  Create sync and async wrappers following existing patterns (see OpenAI or Anthropic implementations).
+</Step>
+
+<Step title="Add tests">
+  ```bash
+  mkdir -p tests/llm/clients/oss/newprovider
+  touch tests/llm/clients/oss/newprovider/test_sync.py
+  touch tests/llm/clients/oss/newprovider/test_async.py
+  ```
+</Step>
+
+<Step title="Update documentation">
+  Add the new provider to README.md and relevant docs.
+</Step>
+
+</Steps>
+
+### Adding a New Database Driver
+
+<Steps>
+
+<Step title="Create driver directory">
+  ```bash
+  mkdir -p memori/storage/drivers/newdb
+  touch memori/storage/drivers/newdb/__init__.py
+  ```
+</Step>
+
+<Step title="Implement driver">
+  Follow the pattern from existing drivers (PostgreSQL, MySQL, etc.).
+</Step>
+
+<Step title="Create migration scripts">
+  ```bash
+  touch tests/build/newdb.py
+  ```
+</Step>
+
+<Step title="Add tests">
+  ```bash
+  mkdir -p tests/storage/drivers/newdb
+  touch tests/storage/drivers/newdb/test_connection.py
+  ```
+</Step>
+
+</Steps>
+
+### Running Benchmarks
+
+```bash
+# Run performance benchmarks
+uv run pytest tests/benchmarks/ -v --benchmark-only
+
+# Run specific benchmark
+uv run pytest tests/benchmarks/test_embeddings.py --benchmark-only
+
+# Compare with baseline
+uv run pytest tests/benchmarks/ --benchmark-compare
+```
+
+## Troubleshooting Development Issues
+
+### uv sync fails
+
+<Accordion title="Dependency resolution or installation errors">
+
+**Solutions:**
+
+1. Clear cache and retry:
+   ```bash
+   uv cache clean
+   uv sync
+   ```
+
+2. Verify Python version:
+   ```bash
+   python --version  # Should be 3.10+
+   ```
+
+3. Update uv:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+</Accordion>
+
+### Pre-commit hooks fail
+
+<Accordion title="Hooks fail to run or install">
+
+**Solutions:**
+
+1. Reinstall hooks:
+   ```bash
+   uv run pre-commit uninstall
+   uv run pre-commit install
+   ```
+
+2. Update hooks:
+   ```bash
+   uv run pre-commit autoupdate
+   uv run pre-commit run --all-files
+   ```
+
+3. Skip temporarily (not recommended):
+   ```bash
+   git commit --no-verify
+   ```
+
+</Accordion>
+
+### Docker issues
+
+<Accordion title="Docker containers won't start or connect">
+
+**Solutions:**
+
+1. Clean and rebuild:
+   ```bash
+   make dev-clean
+   make dev-up
+   ```
+
+2. Check Docker daemon:
+   ```bash
+   docker ps
+   docker compose ps
+   ```
+
+3. Check logs:
+   ```bash
+   docker compose logs dev
+   docker compose logs postgres
+   ```
+
+4. Free up resources:
+   ```bash
+   docker system prune -a
+   ```
+
+</Accordion>
+
+### Test failures
+
+<Accordion title="Tests fail locally but should pass">
+
+**Solutions:**
+
+1. Ensure clean state:
+   ```bash
+   # Clean Python cache
+   find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+   find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
+   ```
+
+2. Reinstall dependencies:
+   ```bash
+   uv sync --reinstall
+   ```
+
+3. Run tests in isolation:
+   ```bash
+   uv run pytest tests/specific_test.py -v --tb=short
+   ```
+
+4. Check for environment variables:
+   ```bash
+   env | grep MEMORI
+   env | grep OPENAI
+   ```
+
+</Accordion>
+
+## Performance Testing
+
+Benchmark your changes:
+
+```bash
+# Install benchmarking tools
+uv sync
+
+# Run performance benchmarks
+uv run pytest tests/benchmarks/ --benchmark-only
+
+# Generate benchmark report
+uv run pytest tests/benchmarks/ --benchmark-only --benchmark-autosave
+
+# Compare with baseline
+uv run pytest tests/benchmarks/ --benchmark-compare=0001
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Guidelines" icon="book-open" href="/contributing/guidelines">
+    Read detailed contribution guidelines
+  </Card>
+  <Card title="Overview" icon="home" href="/contributing/overview">
+    Back to contributing overview
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/advanced/troubleshooting">
+    Common development issues
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/MemoriLabs/Memori">
+    Visit the repository
+  </Card>
+</CardGroup>

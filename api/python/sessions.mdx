@@ -1,0 +1,368 @@
+---
+title: "Sessions"
+description: "Session management for conversation contexts"
+---
+
+## Overview
+
+Sessions in Memori allow you to manage conversation contexts. Each session has a unique ID and maintains its own cache. Sessions are useful for:
+
+- Separating different conversations or threads
+- Managing conversation boundaries
+- Resetting context between interactions
+- Continuing previous conversations
+
+## Methods
+
+### new_session()
+
+Create a new session with a fresh UUID. This method:
+- Generates a new session ID using `uuid4()`
+- Resets the internal cache
+- Returns the Memori instance for chaining
+
+#### Returns
+
+<ResponseField name="return" type="Memori">
+  Returns the Memori instance for method chaining
+</ResponseField>
+
+#### Example
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+# Start first conversation
+mem.attribution(entity_id="user-123")
+facts1 = mem.recall("conversation topic")
+
+# Start a new conversation with fresh context
+mem.new_session()
+facts2 = mem.recall("different topic")
+```
+
+### set_session()
+
+Set an existing session ID to continue a previous session. This is useful for:
+- Resuming conversations
+- Sharing session state across requests
+- Implementing multi-turn conversations in stateless environments
+
+#### Parameters
+
+<ParamField path="id" type="str | UUID" required>
+  The session ID to use. Can be a string or UUID object.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="return" type="Memori">
+  Returns the Memori instance for method chaining
+</ResponseField>
+
+#### Example
+
+```python
+from uuid import UUID
+from memori import Memori
+
+# Create a session and save its ID
+mem = Memori()
+original_session_id = mem.config.session_id
+print(f"Session ID: {original_session_id}")
+
+# Later, resume the same session
+mem_resumed = Memori()
+mem_resumed.set_session(original_session_id)
+```
+
+## Session ID
+
+Access the current session ID via the config:
+
+```python
+mem = Memori()
+print(mem.config.session_id)  # UUID object
+print(str(mem.config.session_id))  # String representation
+```
+
+## Usage Examples
+
+### Basic Session Management
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user-123")
+
+# First conversation
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "My name is Alice"}]
+)
+
+# Start new session
+mem.new_session()
+
+# New conversation - previous context is cleared
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What's my name?"}]
+)
+# The model won't remember "Alice" from the previous session
+```
+
+### Web Application: Request-Based Sessions
+
+```python
+from flask import Flask, session
+from memori import Memori
+from uuid import uuid4
+
+app = Flask(__name__)
+app.secret_key = "your-secret-key"
+
+def get_memori(user_id: str):
+    mem = Memori()
+    mem.attribution(entity_id=user_id)
+    
+    # Get or create session ID
+    if "memori_session_id" not in session:
+        session["memori_session_id"] = str(uuid4())
+    
+    mem.set_session(session["memori_session_id"])
+    return mem
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_id = request.json["user_id"]
+    message = request.json["message"]
+    
+    mem = get_memori(user_id)
+    facts = mem.recall(message)
+    
+    # ... process chat ...
+    
+    return {"response": "...", "session_id": session["memori_session_id"]}
+```
+
+### Stateless API: Client-Managed Sessions
+
+```python
+from fastapi import FastAPI, Header
+from memori import Memori
+from uuid import UUID, uuid4
+
+app = FastAPI()
+
+@app.post("/chat")
+async def chat(
+    message: str,
+    user_id: str,
+    session_id: str | None = Header(None, alias="X-Session-ID")
+):
+    mem = Memori()
+    mem.attribution(entity_id=user_id)
+    
+    # Use provided session ID or create new one
+    if session_id:
+        mem.set_session(UUID(session_id))
+    else:
+        # new_session() is called automatically in __init__
+        session_id = str(mem.config.session_id)
+    
+    facts = mem.recall(message)
+    
+    return {
+        "response": "...",
+        "session_id": session_id
+    }
+```
+
+### Multi-Turn Conversations
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user-123")
+
+# Turn 1
+print("User: My favorite color is blue")
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "My favorite color is blue"}]
+)
+print(f"AI: {response1.choices[0].message.content}")
+
+# Turn 2 - same session
+print("User: What's my favorite color?")
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What's my favorite color?"}]
+)
+print(f"AI: {response2.choices[0].message.content}")
+# AI remembers from Turn 1
+
+# New conversation
+mem.new_session()
+
+# Turn 3 - new session
+print("User: What's my favorite color?")
+response3 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What's my favorite color?"}]
+)
+print(f"AI: {response3.choices[0].message.content}")
+# AI doesn't remember - new session
+```
+
+### Chatbot with Session Timeout
+
+```python
+import time
+from datetime import datetime, timedelta
+from memori import Memori
+
+class ChatSession:
+    def __init__(self, user_id: str, timeout_minutes: int = 30):
+        self.mem = Memori()
+        self.mem.attribution(entity_id=user_id)
+        self.last_activity = datetime.now()
+        self.timeout = timedelta(minutes=timeout_minutes)
+    
+    def send_message(self, message: str):
+        # Check if session timed out
+        if datetime.now() - self.last_activity > self.timeout:
+            print("Session timed out, starting new session")
+            self.mem.new_session()
+        
+        self.last_activity = datetime.now()
+        facts = self.mem.recall(message)
+        return facts
+
+# Usage
+chat = ChatSession("user-123", timeout_minutes=30)
+
+chat.send_message("Hello")
+time.sleep(60 * 31)  # Wait 31 minutes
+chat.send_message("Hi again")  # New session started
+```
+
+### Saving and Restoring Sessions
+
+```python
+import json
+from memori import Memori
+from uuid import UUID
+
+# Save session to file
+mem = Memori()
+mem.attribution(entity_id="user-123")
+
+session_data = {
+    "session_id": str(mem.config.session_id),
+    "entity_id": mem.config.entity_id,
+    "process_id": mem.config.process_id
+}
+
+with open("session.json", "w") as f:
+    json.dump(session_data, f)
+
+# Restore session from file
+with open("session.json", "r") as f:
+    session_data = json.load(f)
+
+mem_restored = Memori()
+mem_restored.attribution(
+    entity_id=session_data["entity_id"],
+    process_id=session_data["process_id"]
+)
+mem_restored.set_session(UUID(session_data["session_id"]))
+```
+
+## Session Configuration
+
+Access session timeout configuration:
+
+```python
+mem = Memori()
+print(mem.config.session_timeout_minutes)  # Default: 30
+
+# Note: Timeout is not enforced automatically
+# Implement your own timeout logic as shown in examples above
+```
+
+## Cache Behavior
+
+The `new_session()` method resets the internal cache:
+
+```python
+mem = Memori()
+
+# Cache stores conversation and entity data
+print(mem.config.cache.conversation_id)  # None initially
+print(mem.config.cache.entity_id)        # None initially
+
+# After some operations, cache is populated
+# ...
+
+# Reset cache
+mem.new_session()
+print(mem.config.cache.conversation_id)  # None again
+```
+
+## Best Practices
+
+### 1. Start New Sessions for Distinct Conversations
+
+```python
+# Good: Separate sessions for different conversation topics
+mem.new_session()  # Topic A
+chat_about_topic_a()
+
+mem.new_session()  # Topic B
+chat_about_topic_b()
+```
+
+### 2. Persist Session IDs in Stateless Environments
+
+```python
+# In web APIs, return session ID to client
+session_id = str(mem.config.session_id)
+return {"response": "...", "session_id": session_id}
+
+# Client sends session ID in subsequent requests
+mem.set_session(UUID(request.headers["X-Session-ID"]))
+```
+
+### 3. Use Sessions with Attribution
+
+```python
+# Always combine sessions with attribution
+mem = Memori()
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.new_session()  # or set_session()
+```
+
+### 4. Handle Session Timeouts
+
+Implement your own timeout logic:
+
+```python
+if is_session_expired(last_activity):
+    mem.new_session()
+```
+
+## See Also
+
+- [Memori](/api/python/memori) - Core Memori class
+- [Attribution](/api/python/attribution) - Memory attribution methods
+- [Recall](/api/python/recall) - Memory recall API

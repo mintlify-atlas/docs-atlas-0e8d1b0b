@@ -1,0 +1,439 @@
+---
+title: 'Memory Recall'
+description: 'Retrieve and query stored memories'
+---
+
+## Overview
+
+The Recall API allows you to retrieve relevant facts and memories from Memori based on a query. While Memori automatically injects memories into your LLM calls when using the `llm.register()` integration, the `recall()` method provides manual access to memories for custom use cases.
+
+## recall()
+
+Manually retrieves relevant facts from Memori based on a query. Useful when you need to fetch memories without triggering a full LLM completion.
+
+```typescript
+const facts = await memori.recall(query);
+```
+
+<ParamField path="query" type="string" required>
+  The search text used to find relevant memories. This can be a question, statement, or any text that should be matched against stored memories.
+</ParamField>
+
+**Returns:** `Promise<ParsedFact[]>` - A list of parsed facts with their relevance scores, sorted by relevance
+
+## ParsedFact Interface
+
+Each fact returned from `recall()` has the following structure:
+
+```typescript
+interface ParsedFact {
+  content: string;
+  score: number;
+  dateCreated?: string;
+}
+```
+
+<ResponseField name="content" type="string">
+  The actual text content of the memory or fact.
+</ResponseField>
+
+<ResponseField name="score" type="number">
+  The relevance score of this fact to the query (0.0 to 1.0). Higher scores indicate higher relevance.
+</ResponseField>
+
+<ResponseField name="dateCreated" type="string">
+  The ISO timestamp (YYYY-MM-DD HH:mm) when this memory was originally created. May be `undefined` if the backend did not return temporal data.
+</ResponseField>
+
+## Basic Usage
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+// Retrieve memories about user preferences
+const facts = await memori.recall('What are the user\'s color preferences?');
+
+console.log(`Found ${facts.length} relevant facts:`);
+
+facts.forEach((fact, index) => {
+  console.log(`\n${index + 1}. [Score: ${fact.score.toFixed(2)}]`);
+  console.log(`   ${fact.content}`);
+  
+  if (fact.dateCreated) {
+    console.log(`   Created: ${fact.dateCreated}`);
+  }
+});
+```
+
+**Example Output:**
+```
+Found 2 relevant facts:
+
+1. [Score: 0.87]
+   User's favorite color is blue
+   Created: 2026-02-28 10:30
+
+2. [Score: 0.72]
+   User prefers dark mode interfaces
+   Created: 2026-02-27 14:15
+```
+
+## Advanced Examples
+
+### Filtering by Relevance Score
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+const facts = await memori.recall('user preferences');
+
+// Only keep highly relevant facts (score > 0.7)
+const highConfidenceFacts = facts.filter(fact => fact.score > 0.7);
+
+console.log(`High confidence facts: ${highConfidenceFacts.length}`);
+highConfidenceFacts.forEach(fact => {
+  console.log(`- ${fact.content}`);
+});
+```
+
+### Custom Relevance Threshold
+
+You can configure the minimum relevance threshold globally:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+// Set minimum relevance threshold to 0.5 (default is 0.1)
+memori.config.recallRelevanceThreshold = 0.5;
+
+// This affects automatic recall in LLM calls
+// Only facts with score >= 0.5 will be injected into the system prompt
+```
+
+<Note>
+  The `recallRelevanceThreshold` configuration only affects automatic memory injection when using `llm.register()`. When calling `recall()` manually, all facts are returned regardless of the threshold, and you can filter them yourself.
+</Note>
+
+### Building Context for Custom Prompts
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().attribution('user-123', 'my-app');
+
+// Note: Not using llm.register() - we're building the prompt manually
+
+async function customPromptWithMemories(userQuery: string) {
+  // Fetch relevant memories
+  const facts = await memori.recall(userQuery);
+  
+  // Filter for high-confidence facts
+  const relevantFacts = facts
+    .filter(fact => fact.score > 0.6)
+    .slice(0, 5); // Top 5 facts
+  
+  // Build context string
+  const context = relevantFacts
+    .map(fact => `- ${fact.content}`)
+    .join('\n');
+  
+  // Create custom system prompt
+  const systemPrompt = context.length > 0
+    ? `You are a helpful assistant. Here's what you know about the user:\n${context}`
+    : 'You are a helpful assistant.';
+  
+  // Make LLM call with custom prompt
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userQuery },
+    ],
+  });
+  
+  return response.choices[0].message.content;
+}
+
+// Usage
+const answer = await customPromptWithMemories('What gift should I buy?');
+console.log(answer);
+```
+
+### Semantic Search
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'knowledge-base');
+
+interface SearchResult {
+  content: string;
+  relevance: number;
+  timestamp?: string;
+}
+
+async function semanticSearch(query: string, limit = 10): Promise<SearchResult[]> {
+  const facts = await memori.recall(query);
+  
+  return facts
+    .slice(0, limit)
+    .map(fact => ({
+      content: fact.content,
+      relevance: fact.score,
+      timestamp: fact.dateCreated,
+    }));
+}
+
+// Search for documents
+const results = await semanticSearch('machine learning algorithms', 5);
+
+results.forEach((result, i) => {
+  console.log(`${i + 1}. [${(result.relevance * 100).toFixed(0)}%] ${result.content}`);
+});
+```
+
+### Multi-Query Recall
+
+```typescript
+import { Memori, ParsedFact } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+async function multiQueryRecall(queries: string[]): Promise<ParsedFact[]> {
+  // Fetch facts for all queries in parallel
+  const allResults = await Promise.all(
+    queries.map(query => memori.recall(query))
+  );
+  
+  // Flatten and deduplicate by content
+  const factsMap = new Map<string, ParsedFact>();
+  
+  allResults.flat().forEach(fact => {
+    const existing = factsMap.get(fact.content);
+    // Keep the fact with the higher score
+    if (!existing || fact.score > existing.score) {
+      factsMap.set(fact.content, fact);
+    }
+  });
+  
+  // Sort by score descending
+  return Array.from(factsMap.values())
+    .sort((a, b) => b.score - a.score);
+}
+
+// Usage
+const facts = await multiQueryRecall([
+  'user preferences',
+  'user settings',
+  'user configuration',
+]);
+
+console.log(`Found ${facts.length} unique facts across all queries`);
+```
+
+### Conditional Memory Usage
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().attribution('user-123', 'my-app').llm.register(client);
+
+async function chatWithOptionalMemory(message: string, useMemory = true) {
+  if (useMemory) {
+    // Check if there are relevant memories
+    const facts = await memori.recall(message);
+    const hasRelevantMemories = facts.some(fact => fact.score > 0.7);
+    
+    if (hasRelevantMemories) {
+      console.log('Using memories for this query');
+      // Normal flow - Memori will inject memories automatically
+    } else {
+      console.log('No relevant memories found');
+    }
+  }
+  
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+  
+  return response.choices[0].message.content;
+}
+
+// Usage
+await chatWithOptionalMemory('What is my favorite color?', true);
+await chatWithOptionalMemory('What is 2+2?', false);
+```
+
+### Debugging Memory Injection
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().attribution('user-123', 'my-app').llm.register(client);
+
+async function debugChat(message: string) {
+  // Manually check what memories will be recalled
+  const facts = await memori.recall(message);
+  
+  console.log('=== Memory Debug ===');
+  console.log(`Query: ${message}`);
+  console.log(`Threshold: ${memori.config.recallRelevanceThreshold}`);
+  console.log(`Total facts: ${facts.length}`);
+  
+  const aboveThreshold = facts.filter(
+    fact => fact.score >= memori.config.recallRelevanceThreshold
+  );
+  
+  console.log(`Facts above threshold: ${aboveThreshold.length}`);
+  aboveThreshold.forEach(fact => {
+    console.log(`  [${fact.score.toFixed(2)}] ${fact.content}`);
+  });
+  console.log('===================\n');
+  
+  // Now make the actual LLM call
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+  
+  return response.choices[0].message.content;
+}
+
+// Usage
+const answer = await debugChat('What do you know about me?');
+console.log(`AI: ${answer}`);
+```
+
+## Automatic vs Manual Recall
+
+### Automatic Recall (Recommended)
+
+When you use `llm.register()`, Memori automatically handles memory recall:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Automatic recall enabled
+const memori = new Memori()
+  .attribution('user-123', 'my-app')
+  .llm.register(client);
+
+// Memories are automatically injected
+const response = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'What is my favorite color?' }],
+});
+```
+
+### Manual Recall
+
+Use `recall()` when you need more control:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// No llm.register() - manual control
+const memori = new Memori().attribution('user-123', 'my-app');
+
+async function manualChat(message: string) {
+  // Manually fetch and filter memories
+  const facts = await memori.recall(message);
+  const topFacts = facts.filter(f => f.score > 0.8).slice(0, 3);
+  
+  // Build custom context
+  const context = topFacts.map(f => f.content).join('\n');
+  
+  // Create custom prompt
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: `Context:\n${context}` },
+      { role: 'user', content: message },
+    ],
+  });
+  
+  return response.choices[0].message.content;
+}
+```
+
+## Error Handling
+
+```typescript
+import { Memori, MemoriApiClientError, TimeoutError } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+async function safeRecall(query: string) {
+  try {
+    const facts = await memori.recall(query);
+    return facts;
+  } catch (error) {
+    if (error instanceof TimeoutError) {
+      console.error('Recall timed out');
+      return [];
+    } else if (error instanceof MemoriApiClientError) {
+      console.error(`API error: ${error.statusCode} - ${error.message}`);
+      return [];
+    } else {
+      console.error('Unexpected error:', error);
+      return [];
+    }
+  }
+}
+
+// Usage
+const facts = await safeRecall('user preferences');
+console.log(`Retrieved ${facts.length} facts`);
+```
+
+<Note>
+  If `recall()` fails (e.g., network error, timeout), it will log a warning to the console and return an empty array `[]` instead of throwing an error. This ensures graceful degradation.
+</Note>
+
+## Best Practices
+
+<Tip>
+  **Use automatic recall for most cases:** The `llm.register()` integration handles memory injection automatically and is recommended for most use cases.
+</Tip>
+
+<Tip>
+  **Use manual recall for:**
+  - Custom prompt engineering
+  - Semantic search functionality
+  - Debugging memory retrieval
+  - Non-LLM use cases (e.g., displaying memories in UI)
+  - Fine-grained control over which memories are used
+</Tip>
+
+<Warning>
+  Always set proper attribution before calling `recall()`. Without attribution, Memori cannot retrieve memories associated with your users or processes.
+</Warning>
+
+<Tip>
+  **Filter by score:** Not all recalled facts may be relevant. Consider filtering by score threshold (e.g., `score > 0.7`) to ensure quality.
+</Tip>
+
+## Related Documentation
+
+- [Memori Class](/api/typescript/memori) - Main SDK entry point
+- [Attribution](/api/typescript/attribution) - Configure attribution context
+- [Session Management](/api/typescript/sessions) - Managing conversation sessions

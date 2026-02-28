@@ -1,0 +1,131 @@
+---
+title: Cloud Installation
+description: Install Memori and set up your API key for the Memori Cloud.
+---
+
+# Installation
+
+Get Memori installed and connected to Memori Cloud in a few steps.
+
+## Install Memori
+
+<CodeGroup>
+
+```bash pip
+pip install memori
+```
+
+```bash poetry
+poetry add memori
+```
+
+```bash uv
+uv add memori
+```
+
+</CodeGroup>
+
+## Install Your LLM Provider
+
+Install the SDK for your preferred LLM provider:
+
+<CodeGroup>
+
+```bash OpenAI
+pip install openai
+```
+
+```bash Anthropic
+pip install anthropic
+```
+
+```bash Google Gemini
+pip install google-genai
+```
+
+```bash xAI Grok
+pip install openai
+```
+
+```bash Nebius AI Studio
+pip install openai
+```
+
+```bash AWS Bedrock
+pip install langchain-aws
+```
+
+```bash LangChain
+pip install langchain-openai
+```
+
+```bash Pydantic AI
+pip install pydantic-ai
+```
+
+</CodeGroup>
+
+## Set Your API Key
+
+Sign up at [app.memorilabs.ai](https://app.memorilabs.ai) to get your Memori API key. The SDK reads it automatically from the environment.
+
+<Note>
+  Your Memori API key from [app.memorilabs.ai](https://app.memorilabs.ai) connects your application to Memori Cloud.
+</Note>
+
+Set this as an environment variable. The Memori SDK reads it automatically on initialization.
+
+<CodeGroup>
+
+```bash Environment Variable
+export MEMORI_API_KEY="your-memori-api-key"
+```
+
+```bash .env File
+# Create a .env file in your project root
+MEMORI_API_KEY=your-memori-api-key
+OPENAI_API_KEY=your-openai-api-key
+```
+
+</CodeGroup>
+
+## Set Your LLM Provider Key
+
+You'll also need an API key for your LLM provider:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="your-openai-key"
+
+# Anthropic
+export ANTHROPIC_API_KEY="your-anthropic-key"
+
+# Google Gemini
+export GOOGLE_API_KEY="your-google-key"
+```
+
+## Verify Installation
+
+Run the following command to confirm the package is installed:
+
+```bash
+pip show memori
+```
+
+You should see output showing the Memori package version and location.
+
+## What's Next?
+
+<Steps>
+  <Step title="Quick Start">
+    Build your first memory-enabled application in under 3 minutes.
+    
+    [Go to Quick Start →](/cloud/quick-start)
+  </Step>
+  
+  <Step title="Choose Your LLM">
+    Explore integration guides for different LLM providers.
+    
+    View LLM integrations in the sidebar
+  </Step>
+</Steps>

@@ -1,0 +1,471 @@
+---
+title: CLI Usage
+description: Complete guide to using the Memori command-line interface
+---
+
+Memori provides a powerful command-line interface (CLI) for managing your account, checking quota usage, and managing database clusters.
+
+## Overview
+
+The Memori CLI is accessed through Python's module execution:
+
+```bash
+python -m memori
+```
+
+Running this command without arguments displays the available options:
+
+```
+ __  __                           _ 
+|  \/  | ___ _ __ ___   ___  _ __(_)
+| |\/| |/ _ \ '_ ` _ \ / _ \| '__| |
+| |  | |  __/ | | | | | (_) | |  | |
+|_|  |_|\___|_| |_| |_|\___/|_|  |_|
+                  perfectam memoriam
+                       memorilabs.ai
+                            v3.2.1
+
+Option         Description                                  Params
+------         -----------                                  ------
+quota          Check your quota                                  N
+setup          Execute suggested setup steps                     N
+sign-up        Sign up for an API key                            Y
+cockroachdb    Manager a CockroachDB cluster                     Y
+
+usage: python -m memori <option> [params]
+```
+
+## Available Commands
+
+### quota
+
+Check your current quota and memory usage for Memori Advanced Augmentation.
+
+**Usage:**
+```bash
+python -m memori quota
+```
+
+**Example Output:**
+```
++ Maximum # of Memories: 100,000
++ Current # of Memories: 1,234
+
++ You are currently using 1.23% of your quota.
+```
+
+**When to Use:**
+- Monitor your memory consumption
+- Check remaining capacity before large operations
+- Verify quota limits for your account
+
+<Tip>
+If you're rate-limited by IP address, sign up for an API key to get increased limits. Memori Advanced Augmentation is always free for developers!
+</Tip>
+
+### sign-up
+
+Sign up for Memori Advanced Augmentation to get an API key and increased quota limits.
+
+**Usage:**
+```bash
+python -m memori sign-up <email_address>
+```
+
+**Parameters:**
+- `email_address` - Your email address for account creation
+
+**Example:**
+```bash
+python -m memori sign-up dev@example.com
+```
+
+**Example Output:**
+```
+You're all set! We sent you an email.
+```
+
+**Error Handling:**
+
+If you provide an invalid email:
+```bash
+python -m memori sign-up invalid-email
+```
+
+Output:
+```
+The email you provided "invalid-email" is not valid.
+```
+
+<Steps>
+
+<Step title="Sign up for an account">
+  Run the sign-up command with your email address:
+  ```bash
+  python -m memori sign-up your@email.com
+  ```
+</Step>
+
+<Step title="Check your email">
+  You'll receive an email with your API key and instructions.
+</Step>
+
+<Step title="Set your API key">
+  Add the API key to your environment:
+  ```bash
+  export MEMORI_API_KEY=your_api_key_here
+  ```
+</Step>
+
+<Step title="Verify your setup">
+  Check your quota to confirm:
+  ```bash
+  python -m memori quota
+  ```
+</Step>
+
+</Steps>
+
+### setup
+
+Execute suggested setup steps, including downloading the embedding model.
+
+**Usage:**
+```bash
+python -m memori setup
+```
+
+**What it Does:**
+- Downloads and caches the `all-mpnet-base-v2` embedding model
+- Ensures all required models are available locally
+- Prepares the environment for offline usage
+
+**Example Output:**
+```
++ Installing model all-mpnet-base-v2
++     this may take a moment; output to follow:
++     -----
+Downloading model files...
+Model downloaded successfully.
++     -----
+```
+
+<Warning>
+The first-time setup downloads approximately 400MB of model files. Ensure you have a stable internet connection and sufficient disk space.
+</Warning>
+
+### cockroachdb
+
+Manage CockroachDB clusters for Memori BYODB deployments.
+
+**Usage:**
+```bash
+python -m memori cockroachdb cluster <start | claim | delete>
+```
+
+**Sub-commands:**
+
+#### start
+
+Create a new managed CockroachDB cluster.
+
+```bash
+python -m memori cockroachdb cluster start
+```
+
+<Accordion title="Example Output">
+```
+Before we begin, we want you to know that security and privacy are
+very important to us. Once we create this cluster for you we can
+never access it again unless you provide us with your connection
+string and we cannot help you recover your credentials if you lose
+them.
+
+This process may take a minute or longer, please be patient.
+
+Proceed [Y/n] Y
+
++ [Step 1] Starting new cluster: done
++ [Step 2] Waiting for cluster to come online: done
++ [Step 3] Creating the Memori schema:
+
++ --- YOUR COCKROACHDB CLUSTER IS READY! ---
+
++ Please save your connection string:
++     postgresql://user:password@host:26257/defaultdb?sslmode=verify-full
+
++ To use your cluster, set the following environment variable:
++     MEMORI_COCKROACHDB_CONNECTION_STRING=postgresql://user:password@host:26257/defaultdb?sslmode=verify-full
+
++ You have to claim this database in 7 days or it will be deleted!
++     https://app.memorilabs.ai/claim/cluster-uuid
+
++ You're all set!
+```
+</Accordion>
+
+<Steps>
+
+<Step title="Start cluster creation">
+  ```bash
+  python -m memori cockroachdb cluster start
+  ```
+</Step>
+
+<Step title="Save your connection string">
+  The connection string is displayed only once. Save it securely!
+</Step>
+
+<Step title="Set environment variable">
+  ```bash
+  export MEMORI_COCKROACHDB_CONNECTION_STRING="your_connection_string"
+  ```
+</Step>
+
+<Step title="Claim your cluster">
+  Visit the claim URL within 7 days to permanently claim your cluster.
+</Step>
+
+</Steps>
+
+<Warning>
+**Important Security Notes:**
+- The connection string is shown only once during creation
+- Memori Labs cannot recover lost credentials
+- Store your connection string in a secure password manager
+- The cluster will be deleted if not claimed within 7 days
+</Warning>
+
+#### claim
+
+Get the claim URL for your CockroachDB cluster.
+
+```bash
+python -m memori cockroachdb cluster claim
+```
+
+**Example Output:**
+```
++ You can claim the CockroachDB cluster by using this URL:
++     https://app.memorilabs.ai/claim/your-cluster-uuid
+```
+
+#### delete
+
+Delete your CockroachDB cluster permanently.
+
+```bash
+python -m memori cockroachdb cluster delete
+```
+
+**Example Output:**
+```
++ The CockroachDB cluster has been deleted.
+```
+
+<Warning>
+This operation is irreversible. All data in the cluster will be permanently deleted.
+</Warning>
+
+## Environment Variables
+
+The CLI respects these environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|--------|
+| `MEMORI_API_KEY` | Your Memori API key | None |
+| `MEMORI_EMBEDDINGS_MODEL` | Embedding model to use | `all-MiniLM-L6-v2` |
+| `MEMORI_COCKROACHDB_CONNECTION_STRING` | CockroachDB connection string | None |
+| `MEMORI_TEST_MODE` | Enable test mode | None |
+
+## Common Workflows
+
+### Initial Setup
+
+<Accordion title="Complete initial setup workflow">
+<Steps>
+
+<Step title="Install Memori">
+  ```bash
+  pip install memori
+  ```
+</Step>
+
+<Step title="Run setup">
+  ```bash
+  python -m memori setup
+  ```
+</Step>
+
+<Step title="Sign up for API key">
+  ```bash
+  python -m memori sign-up your@email.com
+  ```
+</Step>
+
+<Step title="Set API key">
+  ```bash
+  export MEMORI_API_KEY=your_api_key
+  ```
+</Step>
+
+<Step title="Verify quota">
+  ```bash
+  python -m memori quota
+  ```
+</Step>
+
+</Steps>
+</Accordion>
+
+### CockroachDB Cluster Setup
+
+<Accordion title="Complete CockroachDB setup workflow">
+<Steps>
+
+<Step title="Install CockroachDB support">
+  ```bash
+  pip install memori[cockroachdb]
+  ```
+</Step>
+
+<Step title="Create cluster">
+  ```bash
+  python -m memori cockroachdb cluster start
+  ```
+</Step>
+
+<Step title="Save connection string">
+  Copy the connection string from the output and store it securely.
+</Step>
+
+<Step title="Configure environment">
+  ```bash
+  export MEMORI_COCKROACHDB_CONNECTION_STRING="your_connection_string"
+  ```
+</Step>
+
+<Step title="Claim cluster">
+  Visit the claim URL within 7 days.
+</Step>
+
+</Steps>
+</Accordion>
+
+## Troubleshooting
+
+### Command Not Found
+
+<Accordion title="python -m memori: No module named memori">
+
+**Problem:** Python cannot find the Memori module.
+
+**Solution:**
+```bash
+# Verify installation
+pip list | grep memori
+
+# Reinstall if necessary
+pip install --force-reinstall memori
+
+# Use the correct Python interpreter
+python3 -m memori
+```
+</Accordion>
+
+### Quota Command Fails
+
+<Accordion title="Network errors or authentication failures">
+
+**Problem:** Cannot reach Memori API or authentication fails.
+
+**Solution:**
+```bash
+# Check your internet connection
+curl https://api.memorilabs.ai/health
+
+# Verify API key is set
+echo $MEMORI_API_KEY
+
+# Try without API key (IP-based rate limiting)
+unset MEMORI_API_KEY
+python -m memori quota
+```
+</Accordion>
+
+### CockroachDB Cluster Fails to Start
+
+<Accordion title="Cluster creation timeout or errors">
+
+**Problem:** Cluster takes too long or fails during creation.
+
+**Solution:**
+1. Wait for completion (can take 2+ minutes)
+2. Check network connectivity
+3. Verify psycopg is installed:
+   ```bash
+   pip install memori[cockroachdb]
+   ```
+4. Try again with better network connection
+5. Contact support if issue persists
+</Accordion>
+
+## Advanced Usage
+
+### Custom Embedding Models
+
+You can configure a custom embedding model via environment variable:
+
+```bash
+export MEMORI_EMBEDDINGS_MODEL="all-mpnet-base-v2"
+python -m memori setup
+```
+
+Supported models from sentence-transformers:
+- `all-MiniLM-L6-v2` (default, fast)
+- `all-mpnet-base-v2` (more accurate)
+- Any compatible sentence-transformers model
+
+### Automation and CI/CD
+
+The CLI can be integrated into automation pipelines:
+
+```bash
+#!/bin/bash
+# setup-memori.sh
+
+set -e
+
+# Install Memori
+pip install memori
+
+# Run setup
+python -m memori setup
+
+# Configure from CI environment
+export MEMORI_API_KEY=${CI_MEMORI_API_KEY}
+
+# Verify setup
+python -m memori quota || echo "Warning: Quota check failed"
+```
+
+<Tip>
+For CI/CD environments, store your `MEMORI_API_KEY` in secure environment variables or secrets management systems.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quota Management" icon="chart-line" href="/advanced/quota-management">
+    Learn how to monitor and optimize your quota usage
+  </Card>
+  <Card title="Performance Tuning" icon="gauge-high" href="/advanced/performance-tuning">
+    Optimize Memori for your workload
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/advanced/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Complete API documentation
+  </Card>
+</CardGroup>

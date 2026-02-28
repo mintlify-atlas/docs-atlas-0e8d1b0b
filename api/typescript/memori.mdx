@@ -1,0 +1,355 @@
+---
+title: 'Memori Class'
+description: 'Main entry point for the Memori TypeScript SDK'
+---
+
+## Overview
+
+The `Memori` class is the main orchestrator for the Memori SDK. It connects your application to the Memori Cloud and your LLM provider, automatically handling:
+
+- Long-term memory recall (fetching relevant facts)
+- Conversation persistence (storing messages)
+- User augmentation (learning from interactions)
+
+## Constructor
+
+```typescript
+const memori = new Memori();
+```
+
+Creates a new instance of the Memori SDK with default configuration.
+
+**Returns:** `Memori`
+
+## Properties
+
+### config
+
+```typescript
+public readonly config: Config
+```
+
+The configuration state for the SDK. Modifying properties here (like `timeout`) affects all future requests.
+
+**Available configuration options:**
+
+<ParamField path="apiKey" type="string | null">
+  The API Key used for authentication. Defaults to `MEMORI_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="baseUrl" type="string">
+  The base URL for the Memori API. Automatically switches between production and staging based on `testMode`.
+</ParamField>
+
+<ParamField path="testMode" type="boolean">
+  Whether the SDK is running in test/staging mode. Defaults to `true` if `MEMORI_TEST_MODE` environment variable is set to '1'.
+</ParamField>
+
+<ParamField path="entityId" type="string">
+  The unique identifier for the end-user associated with the current memories.
+</ParamField>
+
+<ParamField path="processId" type="string">
+  The unique identifier for the specific process or workflow.
+</ParamField>
+
+<ParamField path="recallRelevanceThreshold" type="number" default="0.1">
+  The minimum relevance score (0.0 to 1.0) required for a memory to be included in the context.
+</ParamField>
+
+<ParamField path="timeout" type="number" default="5000">
+  Request timeout in milliseconds.
+</ParamField>
+
+### session
+
+```typescript
+public readonly session: SessionManager
+```
+
+Manages the current conversation session ID. See [Session Management](/api/typescript/sessions) for details.
+
+### axon
+
+```typescript
+public readonly axon: Axon
+```
+
+The underlying Axon instance used for LLM middleware hooks.
+
+### llm
+
+```typescript
+public readonly llm: {
+  register: (client: unknown) => Memori;
+}
+```
+
+Access the LLM integration layer.
+
+## Methods
+
+### llm.register()
+
+Registers a third-party LLM client (e.g., OpenAI, Anthropic) with Memori. This enables Memori to automatically inject recalled memories into the system prompt.
+
+```typescript
+const memori = new Memori();
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+memori.llm.register(client);
+```
+
+<ParamField path="client" type="unknown" required>
+  An instantiated client from a supported provider (OpenAI, Anthropic, etc).
+</ParamField>
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+**Supported LLM Providers:**
+- OpenAI (`openai` package)
+- Anthropic (`@anthropic-ai/sdk` package)
+
+<CodeGroup>
+```typescript OpenAI
+import { OpenAI } from 'openai';
+import { Memori } from '@memorilabs/memori';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+const response = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'What is my favorite color?' }],
+});
+```
+
+```typescript Anthropic
+import { Anthropic } from '@anthropic-ai/sdk';
+import { Memori } from '@memorilabs/memori';
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const memori = new Memori().llm.register(client);
+
+const response = await client.messages.create({
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'What is my favorite color?' }],
+});
+```
+</CodeGroup>
+
+### attribution()
+
+Configures the attribution context for subsequent operations. This helps segregate memories by user (Entity) or workflow (Process).
+
+```typescript
+memori.attribution(entityId, processId);
+```
+
+<ParamField path="entityId" type="string">
+  Unique identifier for the end-user (e.g., user GUID). If not provided, the existing entityId is preserved.
+</ParamField>
+
+<ParamField path="processId" type="string">
+  Unique identifier for the specific workflow or agent. If not provided, the existing processId is preserved.
+</ParamField>
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+**Important:** If you do not provide any attribution, Memori cannot make memories for you. Attribution is required for the SDK to function properly.
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori()
+  .attribution('user-123', 'my-chat-agent')
+  .llm.register(client);
+```
+
+### recall()
+
+Manually retrieves relevant facts from Memori based on a query. Useful if you need to fetch memories without triggering a full LLM completion.
+
+```typescript
+const facts = await memori.recall(query);
+```
+
+<ParamField path="query" type="string" required>
+  The search text used to find relevant memories.
+</ParamField>
+
+**Returns:** `Promise<ParsedFact[]>` - A list of parsed facts with their relevance scores
+
+<ResponseField name="ParsedFact" type="object">
+  <ResponseField name="content" type="string">
+    The actual text content of the memory or fact.
+  </ResponseField>
+  
+  <ResponseField name="score" type="number">
+    The relevance score of this fact to the query (0.0 to 1.0). Higher is more relevant.
+  </ResponseField>
+  
+  <ResponseField name="dateCreated" type="string">
+    The ISO timestamp (YYYY-MM-DD HH:mm) when this memory was originally created. Undefined if the backend did not return temporal data.
+  </ResponseField>
+</ResponseField>
+
+See [Memory Recall API](/api/typescript/recall) for detailed documentation.
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+const facts = await memori.recall('What are the user\'s preferences?');
+
+facts.forEach(fact => {
+  console.log(`[Score: ${fact.score}] ${fact.content}`);
+  if (fact.dateCreated) {
+    console.log(`  Created: ${fact.dateCreated}`);
+  }
+});
+```
+
+### resetSession()
+
+Resets the current session ID to a new random UUID. Call this when starting a completely new conversation thread.
+
+```typescript
+memori.resetSession();
+```
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+// ... some conversation ...
+
+// Start a new conversation
+memori.resetSession();
+
+// The next LLM call will be in a new session
+const response = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+```
+
+### setSession()
+
+Manually sets the session ID. Use this to resume an existing conversation thread from your database.
+
+```typescript
+memori.setSession(id);
+```
+
+<ParamField path="id" type="string" required>
+  The UUID of the session to resume.
+</ParamField>
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori().attribution('user-123', 'my-app');
+
+// Get the current session ID
+const sessionId = memori.session.id;
+
+// Store it in your database
+await db.saveSession(sessionId);
+
+// ... Later, when resuming ...
+
+const savedSessionId = await db.getSession();
+memori.setSession(savedSessionId);
+
+// Continue the conversation
+const response = await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'What did we discuss earlier?' }],
+});
+```
+
+## Complete Example
+
+```typescript
+import 'dotenv/config';
+import { OpenAI } from 'openai';
+import { Memori } from '@memorilabs/memori';
+
+// Initialize the LLM Client
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Initialize Memori and Register the Client
+const memori = new Memori()
+  .llm.register(client)
+  .attribution('typescript-sdk-test-user', 'test-process-1');
+
+async function main() {
+  // Step 1: Teaching the AI
+  console.log('--- Step 1: Teaching the AI ---');
+  const factPrompt = 'My favorite color is blue and I live in Paris.';
+  console.log(`User: ${factPrompt}`);
+
+  // This call automatically triggers Persistence and Augmentation
+  const response1 = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: factPrompt }],
+  });
+
+  console.log(`AI: ${response1.choices[0].message.content}`);
+
+  // Wait for backend processing
+  console.log('\n(Waiting 5 seconds for backend processing...)\n');
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  // Step 2: Testing Recall
+  console.log('--- Step 2: Testing Recall ---');
+  const questionPrompt = 'What is my favorite color?';
+  console.log(`User: ${questionPrompt}`);
+
+  // This call automatically triggers Recall, injecting facts into the prompt
+  const response2 = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: questionPrompt }],
+  });
+
+  console.log(`AI: ${response2.choices[0].message.content}`);
+}
+
+main().catch(console.error);
+```
+
+## Error Handling
+
+The SDK exports several error classes for handling different failure scenarios:
+
+```typescript
+import {
+  Memori,
+  QuotaExceededError,
+  MemoriApiClientError,
+  MissingMemoriApiKeyError,
+  TimeoutError,
+} from '@memorilabs/memori';
+
+try {
+  const facts = await memori.recall('user preferences');
+} catch (error) {
+  if (error instanceof QuotaExceededError) {
+    console.error('Quota exceeded. Sign up for an API key.');
+  } else if (error instanceof MissingMemoriApiKeyError) {
+    console.error('API key required for this operation.');
+  } else if (error instanceof TimeoutError) {
+    console.error('Request timed out.');
+  } else if (error instanceof MemoriApiClientError) {
+    console.error(`API error: ${error.statusCode} - ${error.message}`);
+  }
+}
+```

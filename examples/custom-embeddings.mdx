@@ -1,0 +1,497 @@
+---
+title: 'Custom Embedding Models'
+description: 'Use custom embedding models for memory recall and semantic search'
+icon: 'brain-circuit'
+---
+
+## Overview
+
+Memori uses embeddings to store and retrieve memories semantically. You can customize the embedding model to match your application's needs.
+
+## Default Embeddings
+
+By default, Memori uses efficient open-source models for embeddings.
+
+<Info>
+  Memori Cloud uses optimized embedding models automatically. For self-hosted deployments, you can customize the embedding configuration.
+</Info>
+
+## Generating Embeddings
+
+You can manually generate embeddings for custom use cases.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from memori import Memori
+
+    mem = Memori()
+
+    # Generate embeddings for a single text
+    text = "Machine learning is transforming industries"
+    embedding = mem.embed_texts(text)
+
+    print(f"Generated embedding with {len(embedding[0])} dimensions")
+    print(f"First few values: {embedding[0][:5]}")
+
+    # Generate embeddings for multiple texts
+    texts = [
+        "Artificial intelligence is advancing rapidly",
+        "Neural networks power modern AI systems",
+        "Deep learning requires large datasets",
+    ]
+    embeddings = mem.embed_texts(texts)
+
+    print(f"Generated {len(embeddings)} embeddings")
+    for i, emb in enumerate(embeddings):
+        print(f"Text {i+1}: {len(emb)} dimensions")
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { Memori } from 'memori';
+
+    async function generateEmbeddings() {
+      const mem = new Memori();
+
+      // Generate embeddings for a single text
+      const text = 'Machine learning is transforming industries';
+      const embedding = await mem.embed_texts(text);
+
+      console.log(`Generated embedding with ${embedding[0].length} dimensions`);
+      console.log(`First few values: ${embedding[0].slice(0, 5)}`);
+
+      // Generate embeddings for multiple texts
+      const texts = [
+        'Artificial intelligence is advancing rapidly',
+        'Neural networks power modern AI systems',
+        'Deep learning requires large datasets',
+      ];
+      const embeddings = await mem.embed_texts(texts);
+
+      console.log(`Generated ${embeddings.length} embeddings`);
+      embeddings.forEach((emb, i) => {
+        console.log(`Text ${i + 1}: ${emb.length} dimensions`);
+      });
+    }
+
+    generateEmbeddings().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Async Embeddings
+
+Generate embeddings asynchronously for better performance.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from memori import Memori
+
+    async def generate_async_embeddings():
+        mem = Memori()
+
+        texts = [
+            "First document about AI",
+            "Second document about ML",
+            "Third document about DL",
+        ]
+
+        # Generate embeddings asynchronously (runs in thread pool)
+        embeddings_future = mem.embed_texts(texts, async_=True)
+
+        # Do other work while embeddings are being generated
+        print("Generating embeddings in background...")
+
+        # Await the result
+        embeddings = await embeddings_future
+
+        print(f"Generated {len(embeddings)} embeddings")
+        return embeddings
+
+    asyncio.run(generate_async_embeddings())
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { Memori } from 'memori';
+
+    async function generateAsyncEmbeddings() {
+      const mem = new Memori();
+
+      const texts = [
+        'First document about AI',
+        'Second document about ML',
+        'Third document about DL',
+      ];
+
+      // Generate embeddings asynchronously (always async in TS)
+      console.log('Generating embeddings...');
+      const embeddings = await mem.embed_texts(texts);
+
+      console.log(`Generated ${embeddings.length} embeddings`);
+      return embeddings;
+    }
+
+    generateAsyncEmbeddings().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Configuring Embedding Models
+
+For self-hosted deployments, you can configure the embedding model.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from memori import Memori
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    # Setup database
+    engine = create_engine("sqlite:///memori.db")
+    Session = sessionmaker(bind=engine)
+
+    # Create Memori instance with custom config
+    mem = Memori(conn=Session)
+
+    # Configure embedding model
+    mem.config.embeddings.model = "sentence-transformers/all-MiniLM-L6-v2"
+
+    # Build storage
+    mem.config.storage.build()
+
+    # Use normally - embeddings will use the configured model
+    text = "This will be embedded with the custom model"
+    embedding = mem.embed_texts(text)
+
+    print(f"Embedding dimension: {len(embedding[0])}")
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    // TypeScript SDK uses Memori Cloud embeddings automatically
+    // Custom models are configured server-side
+    import { Memori } from 'memori';
+
+    const mem = new Memori();
+    mem.attribution('user-123');
+
+    // Embeddings are generated automatically during recall
+    const facts = await mem.recall('What are my preferences?');
+
+    console.log(`Found ${facts.length} relevant facts`);
+    ```
+  </Tab>
+</Tabs>
+
+## Semantic Search
+
+Use embeddings for semantic similarity search.
+
+<CodeGroup>
+```python Python
+from memori import Memori
+import numpy as np
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+mem = Memori()
+
+# Document corpus
+documents = [
+    "Python is a programming language",
+    "JavaScript runs in browsers",
+    "Machine learning uses neural networks",
+    "Databases store structured data",
+    "APIs connect different services",
+]
+
+# Generate embeddings for all documents
+doc_embeddings = mem.embed_texts(documents)
+
+# User query
+query = "How do I connect to a web service?"
+query_embedding = mem.embed_texts(query)[0]
+
+# Find most similar documents
+similarities = []
+for i, doc_emb in enumerate(doc_embeddings):
+    similarity = cosine_similarity(query_embedding, doc_emb)
+    similarities.append((i, similarity, documents[i]))
+
+# Sort by similarity
+similarities.sort(key=lambda x: x[1], reverse=True)
+
+print("Most relevant documents:")
+for idx, score, doc in similarities[:3]:
+    print(f"  [{score:.3f}] {doc}")
+```
+
+```typescript TypeScript
+import { Memori } from 'memori';
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+  const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+  const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+  return dotProduct / (magA * magB);
+}
+
+async function semanticSearch() {
+  const mem = new Memori();
+
+  // Document corpus
+  const documents = [
+    'Python is a programming language',
+    'JavaScript runs in browsers',
+    'Machine learning uses neural networks',
+    'Databases store structured data',
+    'APIs connect different services',
+  ];
+
+  // Generate embeddings for all documents
+  const docEmbeddings = await mem.embed_texts(documents);
+
+  // User query
+  const query = 'How do I connect to a web service?';
+  const queryEmbedding = (await mem.embed_texts(query))[0];
+
+  // Find most similar documents
+  const similarities: Array<{ idx: number; score: number; doc: string }> = [];
+  docEmbeddings.forEach((docEmb, i) => {
+    const similarity = cosineSimilarity(queryEmbedding, docEmb);
+    similarities.push({ idx: i, score: similarity, doc: documents[i] });
+  });
+
+  // Sort by similarity
+  similarities.sort((a, b) => b.score - a.score);
+
+  console.log('Most relevant documents:');
+  similarities.slice(0, 3).forEach(({ score, doc }) => {
+    console.log(`  [${score.toFixed(3)}] ${doc}`);
+  });
+}
+
+semanticSearch().catch(console.error);
+```
+</CodeGroup>
+
+## Custom Embedding Pipeline
+
+Integrate Memori with your existing embedding infrastructure.
+
+<CodeGroup>
+```python Python
+from memori import Memori
+from openai import OpenAI
+import numpy as np
+
+class CustomEmbeddingMemori:
+    def __init__(self):
+        self.mem = Memori()
+        self.openai_client = OpenAI()
+
+    def generate_embeddings_openai(self, texts: list[str]) -> list[list[float]]:
+        """Use OpenAI embeddings instead of default model"""
+        response = self.openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=texts,
+        )
+        return [item.embedding for item in response.data]
+
+    def search_documents(self, query: str, documents: list[str]) -> list[tuple]:
+        # Use custom embeddings
+        doc_embeddings = self.generate_embeddings_openai(documents)
+        query_embedding = self.generate_embeddings_openai([query])[0]
+
+        # Calculate similarities
+        similarities = []
+        for i, doc_emb in enumerate(doc_embeddings):
+            similarity = np.dot(query_embedding, doc_emb)
+            similarities.append((i, similarity, documents[i]))
+
+        return sorted(similarities, key=lambda x: x[1], reverse=True)
+
+# Usage
+custom_mem = CustomEmbeddingMemori()
+documents = [
+    "AI is transforming healthcare",
+    "Blockchain enables decentralization",
+    "Quantum computing is emerging",
+]
+results = custom_mem.search_documents("medical technology", documents)
+
+for idx, score, doc in results:
+    print(f"[{score:.3f}] {doc}")
+```
+
+```typescript TypeScript
+import { Memori } from 'memori';
+import { OpenAI } from 'openai';
+
+class CustomEmbeddingMemori {
+  private mem: Memori;
+  private openaiClient: OpenAI;
+
+  constructor() {
+    this.mem = new Memori();
+    this.openaiClient = new OpenAI();
+  }
+
+  async generateEmbeddingsOpenAI(texts: string[]): Promise<number[][]> {
+    const response = await this.openaiClient.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: texts,
+    });
+    return response.data.map((item) => item.embedding);
+  }
+
+  async searchDocuments(
+    query: string,
+    documents: string[]
+  ): Promise<Array<{ idx: number; score: number; doc: string }>> {
+    // Use custom embeddings
+    const docEmbeddings = await this.generateEmbeddingsOpenAI(documents);
+    const queryEmbedding = (await this.generateEmbeddingsOpenAI([query]))[0];
+
+    // Calculate similarities
+    const similarities = docEmbeddings.map((docEmb, i) => {
+      const similarity = queryEmbedding.reduce((sum, val, j) => sum + val * docEmb[j], 0);
+      return { idx: i, score: similarity, doc: documents[i] };
+    });
+
+    return similarities.sort((a, b) => b.score - a.score);
+  }
+}
+
+// Usage
+async function main() {
+  const customMem = new CustomEmbeddingMemori();
+  const documents = [
+    'AI is transforming healthcare',
+    'Blockchain enables decentralization',
+    'Quantum computing is emerging',
+  ];
+  const results = await customMem.searchDocuments('medical technology', documents);
+
+  results.forEach(({ score, doc }) => {
+    console.log(`[${score.toFixed(3)}] ${doc}`);
+  });
+}
+
+main().catch(console.error);
+```
+</CodeGroup>
+
+## Embedding Model Comparison
+
+<Tabs>
+  <Tab title="Performance">
+    | Model | Dimensions | Speed | Quality |
+    |-------|-----------|--------|----------|
+    | `all-MiniLM-L6-v2` | 384 | Fast | Good |
+    | `all-mpnet-base-v2` | 768 | Medium | Better |
+    | `text-embedding-3-small` | 1536 | Slow | Best |
+  </Tab>
+
+  <Tab title="Use Cases">
+    - **all-MiniLM-L6-v2**: Fast retrieval, resource-constrained environments
+    - **all-mpnet-base-v2**: Balanced performance and quality
+    - **text-embedding-3-small**: High-accuracy semantic search
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Default Models" icon="gauge-high">
+    Memori's default models are optimized for memory recall - only customize if needed.
+  </Card>
+
+  <Card title="Batch Embeddings" icon="layer-group">
+    Generate embeddings in batches for better performance.
+  </Card>
+
+  <Card title="Cache Embeddings" icon="database">
+    Store embeddings to avoid regenerating them repeatedly.
+  </Card>
+
+  <Card title="Monitor Dimensions" icon="ruler">
+    Higher dimensions = better quality but slower search.
+  </Card>
+</CardGroup>
+
+## Advanced Configuration
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from memori import Memori
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine("postgresql://user:pass@localhost/memori")
+    Session = sessionmaker(bind=engine)
+
+    mem = Memori(conn=Session)
+
+    # Configure embeddings
+    mem.config.embeddings.model = "sentence-transformers/all-mpnet-base-v2"
+    mem.config.recall_facts_limit = 10  # Return top 10 facts
+    mem.config.recall_embeddings_limit = 50  # Search top 50 embeddings
+    mem.config.recall_relevance_threshold = 0.7  # Min relevance score
+
+    mem.config.storage.build()
+    ```
+  </Tab>
+
+  <Tab title="Environment Variables">
+    ```bash
+    # Set embedding configuration via environment
+    export MEMORI_EMBEDDING_MODEL="sentence-transformers/all-mpnet-base-v2"
+    export MEMORI_RECALL_FACTS_LIMIT=10
+    export MEMORI_RECALL_EMBEDDINGS_LIMIT=50
+    ```
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Embeddings are slow" icon="hourglass">
+    - Use a smaller model like `all-MiniLM-L6-v2`
+    - Generate embeddings asynchronously with `async_=True`
+    - Batch multiple texts together
+  </Accordion>
+
+  <Accordion title="Poor recall quality" icon="magnifying-glass">
+    - Use a larger model like `all-mpnet-base-v2`
+    - Adjust `recall_relevance_threshold` (lower = more results)
+    - Increase `recall_embeddings_limit` to search more candidates
+  </Accordion>
+
+  <Accordion title="Memory usage is high" icon="memory">
+    - Use models with lower dimensions
+    - Reduce `recall_embeddings_limit`
+    - Clear old memories periodically
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Memory" icon="brain" href="/examples/basic-memory">
+    Learn basic memory operations
+  </Card>
+  <Card title="Multi-User" icon="users" href="/examples/multi-user">
+    Manage memories for multiple users
+  </Card>
+</CardGroup>

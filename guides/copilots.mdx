@@ -1,0 +1,694 @@
+---
+title: Building AI Copilot Applications
+description: Create AI copilots that remember user context, preferences, and project history to provide personalized assistance across coding, writing, and workflow tasks.
+---
+
+# Building AI Copilot Applications
+
+AI copilots are intelligent assistants that work alongside users to enhance productivity. Unlike chatbots that respond to queries, copilots proactively understand context, anticipate needs, and adapt to individual working styles. Memori gives copilots the memory they need to truly assist — not just respond.
+
+## What Makes a Great Copilot
+
+Effective copilots go beyond simple Q&A:
+
+- **Contextual awareness** — Understand the current task, project, and user goals
+- **Personalization** — Adapt to individual preferences, tools, and workflows  
+- **Learning over time** — Remember successful patterns and user feedback
+- **Proactive assistance** — Anticipate needs based on past interactions
+- **Project continuity** — Maintain context across days, weeks, and months
+
+Memori enables all of this by giving copilots structured, persistent memory.
+
+## Core Pattern: User + Copilot Attribution
+
+Every copilot interaction needs two IDs:
+
+```python
+mem.attribution(
+    entity_id="developer_123",        # Who is using the copilot?
+    process_id="coding_copilot"       # Which copilot is this?
+)
+```
+
+- **Entity ID** — The user being assisted (developer, writer, analyst, etc.)
+- **Process ID** — The copilot's role (code assistant, writing assistant, etc.)
+
+Memori uses these to build personalized memory profiles for each user.
+
+## Use Case 1: Coding Copilot
+
+Build a coding assistant that learns your tech stack, style, and project context.
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    pip install memori openai
+    ```
+  </Step>
+
+  <Step title="Set Environment Variables">
+    ```bash
+    export MEMORI_API_KEY="your-memori-api-key"
+    export OPENAI_API_KEY="your-openai-api-key"
+    ```
+  </Step>
+
+  <Step title="Create Coding Copilot">
+    Create `coding_copilot.py`:
+
+    ```python
+    from memori import Memori
+    from openai import OpenAI
+
+    class CodingCopilot:
+        def __init__(self, developer_id: str):
+            self.client = OpenAI()
+            self.mem = Memori().llm.register(self.client)
+            
+            # Attribution links memories to this developer
+            self.mem.attribution(
+                entity_id=developer_id,
+                process_id="coding_copilot"
+            )
+        
+        def assist(self, request: str) -> str:
+            """Provide coding assistance."""
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert coding copilot. Learn the developer's "
+                                   "tech stack, coding style, and project context. Provide "
+                                   "personalized, context-aware assistance."
+                    },
+                    {"role": "user", "content": request}
+                ]
+            )
+            return response.choices[0].message.content
+
+    if __name__ == "__main__":
+        copilot = CodingCopilot("developer_jane")
+        
+        # Day 1: Establish context
+        print("Developer: Help me set up a new FastAPI project with PostgreSQL")
+        response1 = copilot.assist(
+            "Help me set up a new FastAPI project with PostgreSQL. "
+            "I prefer SQLAlchemy 2.0 with async support and Pydantic v2 models."
+        )
+        print(f"Copilot: {response1}\n")
+        
+        print("Developer: Show me how to structure the database models")
+        response2 = copilot.assist(
+            "Show me how to structure the database models for a user authentication system."
+        )
+        print(f"Copilot: {response2}\n")
+        
+        copilot.mem.augmentation.wait()
+        
+        # Day 2: Copilot remembers preferences
+        print("--- Next day ---\n")
+        print("Developer: Add email verification to the auth system")
+        response3 = copilot.assist(
+            "Add email verification to the authentication system."
+        )
+        print(f"Copilot: {response3}")
+        # Copilot recalls: FastAPI, PostgreSQL, SQLAlchemy 2.0 async, Pydantic v2
+    ```
+  </Step>
+
+  <Step title="Run the Copilot">
+    ```bash
+    python coding_copilot.py
+    ```
+
+    The copilot remembers your tech stack and preferences, providing consistent, personalized assistance!
+  </Step>
+</Steps>
+
+## Use Case 2: Writing Copilot
+
+Create a writing assistant that learns your style, tone, and project context.
+
+```python
+from memori import Memori
+from anthropic import Anthropic
+
+class WritingCopilot:
+    def __init__(self, writer_id: str):
+        self.client = Anthropic()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=writer_id,
+            process_id="writing_copilot"
+        )
+    
+    def assist(self, request: str) -> str:
+        """Provide writing assistance."""
+        response = self.client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"You are a writing copilot. Learn the writer's style, "
+                                    f"tone, and preferences. Provide personalized assistance.\n\n"
+                                    f"{request}"
+                        }
+                    ]
+                }
+            ]
+        )
+        return response.content[0].text
+
+# Usage
+copilot = WritingCopilot("writer_john")
+
+# Establish writing style
+response1 = copilot.assist(
+    "Help me write the introduction for a blog post about AI memory systems. "
+    "I prefer a conversational tone with technical depth, similar to how Stripe "
+    "writes their docs — friendly but precise."
+)
+print(response1)
+
+copilot.mem.augmentation.wait()
+
+# Later: Copilot adapts to learned style
+response2 = copilot.assist(
+    "Write a conclusion for the AI memory blog post."
+)
+print(response2)
+# Copilot recalls: Conversational tone, technical depth, Stripe-style docs
+```
+
+## Use Case 3: Data Analysis Copilot
+
+Build a copilot that assists with data analysis, remembering datasets, preferences, and insights.
+
+<CodeGroup>
+
+```python {{ title: 'Analysis Copilot' }}
+from memori import Memori
+from openai import OpenAI
+import pandas as pd
+
+class DataCopilot:
+    def __init__(self, analyst_id: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=analyst_id,
+            process_id="data_copilot"
+        )
+    
+    def analyze(self, query: str) -> str:
+        """Assist with data analysis."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a data analysis copilot. Remember datasets, "
+                               "analysis patterns, and user preferences. Provide insights "
+                               "and suggestions based on previous work."
+                },
+                {"role": "user", "content": query}
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage
+copilot = DataCopilot("analyst_sarah")
+
+# Initial analysis
+response1 = copilot.analyze(
+    "I'm analyzing sales data for Q1 2025. Main dataset has columns: "
+    "date, product_id, revenue, region, customer_segment. "
+    "I want to focus on growth trends by region."
+)
+print(response1)
+
+copilot.mem.augmentation.wait()
+
+# Follow-up analysis
+response2 = copilot.analyze(
+    "Now compare Q1 performance to Q4 2024."
+)
+print(response2)
+# Copilot recalls: Q1 dataset structure, focus on regional growth
+
+# Later: Similar analysis for Q2
+response3 = copilot.analyze(
+    "Analyze Q2 sales data using the same approach."
+)
+print(response3)
+# Copilot applies learned patterns to new data
+```
+
+```python {{ title: 'Agno-Powered Copilot' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+class AgnoCopilot:
+    def __init__(self, user_id: str, copilot_type: str):
+        model = OpenAIChat(id="gpt-4o-mini")
+        
+        self.mem = Memori().llm.register(openai_chat=model)
+        self.mem.attribution(
+            entity_id=user_id,
+            process_id=f"{copilot_type}_copilot"
+        )
+        
+        self.agent = Agent(
+            model=model,
+            instructions=[
+                f"You are a {copilot_type} copilot.",
+                "Learn user preferences and project context.",
+                "Provide personalized, context-aware assistance.",
+            ],
+            markdown=True,
+        )
+    
+    def assist(self, request: str) -> str:
+        response = self.agent.run(request)
+        return response.content
+
+# Create specialized copilot
+copilot = AgnoCopilot("user_123", "product")
+
+# Copilot learns over time
+response1 = copilot.assist(
+    "Help me write product requirements for a notification feature. "
+    "Our stack is React + FastAPI + PostgreSQL."
+)
+print(response1)
+
+copilot.mem.augmentation.wait()
+
+# Later: Copilot uses learned context
+response2 = copilot.assist(
+    "Draft API endpoints for the notification feature."
+)
+print(response2)
+# Recalls: React + FastAPI + PostgreSQL stack
+```
+
+</CodeGroup>
+
+## Use Case 4: Project-Aware Copilot
+
+Build a copilot that maintains context across an entire project lifecycle.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+class ProjectCopilot:
+    def __init__(self, user_id: str, project_id: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        
+        # Use project_id in entity to share context across the project
+        self.mem.attribution(
+            entity_id=f"{user_id}_{project_id}",
+            process_id="project_copilot"
+        )
+    
+    def assist(self, request: str, stage: str) -> str:
+        """Provide project assistance for different stages."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"You are a project copilot in the {stage} stage. "
+                               f"Maintain context across all project phases. Reference "
+                               f"decisions and context from previous stages."
+                },
+                {"role": "user", "content": request}
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage across project lifecycle
+copilot = ProjectCopilot("dev_mike", "ecommerce_platform")
+
+# Planning stage
+print("=== Planning Stage ===")
+planning = copilot.assist(
+    "Plan the architecture for an e-commerce platform. Requirements: "
+    "Support 10k concurrent users, integrate with Stripe, use microservices.",
+    stage="planning"
+)
+print(planning)
+
+copilot.mem.augmentation.wait()
+
+# Development stage
+print("\n=== Development Stage ===")
+dev = copilot.assist(
+    "Help me implement the payment service.",
+    stage="development"
+)
+print(dev)
+# Recalls: Stripe integration, microservices architecture
+
+# Testing stage
+print("\n=== Testing Stage ===")
+testing = copilot.assist(
+    "Create integration tests for the payment flow.",
+    stage="testing"
+)
+print(testing)
+# Recalls: Payment service implementation, Stripe integration
+
+# Deployment stage
+print("\n=== Deployment Stage ===")
+deploy = copilot.assist(
+    "Plan the deployment strategy.",
+    stage="deployment"
+)
+print(deploy)
+# Recalls: Microservices architecture, 10k concurrent users requirement
+```
+
+## Advanced: Context-Aware Code Suggestions
+
+Build a copilot that provides code suggestions based on project context and history.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+class CodeSuggestionCopilot:
+    def __init__(self, developer_id: str, repo_id: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=f"{developer_id}_{repo_id}",
+            process_id="code_suggestions"
+        )
+    
+    def suggest(self, context: str, task: str) -> str:
+        """Provide context-aware code suggestions."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a code suggestion copilot. Learn the codebase patterns, "
+                               "conventions, and tech stack. Provide suggestions that match "
+                               "the project's style and architecture."
+                },
+                {
+                    "role": "user",
+                    "content": f"Context: {context}\n\nTask: {task}"
+                }
+            ]
+        )
+        return response.choices[0].message.content
+    
+    def learn_convention(self, convention: str):
+        """Teach the copilot a project convention."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Remember this project convention: {convention}"
+                }
+            ]
+        )
+        return response.choices[0].message.content
+
+# Usage
+copilot = CodeSuggestionCopilot("dev_alice", "api_service")
+
+# Teach conventions
+copilot.learn_convention(
+    "All API endpoints use dependency injection for database sessions. "
+    "Pattern: def endpoint(db: Session = Depends(get_db))"
+)
+
+copilot.learn_convention(
+    "Error handling uses custom exception classes that inherit from APIException. "
+    "All exceptions include error_code, message, and status_code."
+)
+
+copilot.mem.augmentation.wait()
+
+# Get suggestions based on learned conventions
+suggestion = copilot.suggest(
+    context="Creating a new endpoint to fetch user profile",
+    task="Write the endpoint function with proper error handling"
+)
+print(suggestion)
+# Copilot applies dependency injection and custom exception patterns
+```
+
+## Integration Patterns
+
+<CardGroup cols={2}>
+  <Card title="VS Code Extension" icon="code">
+    Build a VS Code extension with Memori for persistent context:
+
+    ```javascript
+    // extension.js
+    const { Memori } = require('memori');
+    const OpenAI = require('openai');
+
+    async function provideSuggestion(context) {
+      const client = new OpenAI();
+      const mem = new Memori().llm.register(client);
+      
+      mem.attribution({
+        entity_id: `dev_${userId}`,
+        process_id: 'vscode_copilot'
+      });
+      
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: context }]
+      });
+      
+      return response.choices[0].message.content;
+    }
+    ```
+  </Card>
+
+  <Card title="Web IDE" icon="browser">
+    Integrate Memori into web-based IDEs:
+
+    ```python
+    from fastapi import FastAPI, Depends
+    from memori import Memori
+    from openai import OpenAI
+
+    app = FastAPI()
+
+    def get_copilot(user_id: str):
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id=user_id,
+            process_id="web_ide_copilot"
+        )
+        return client
+
+    @app.post("/suggest")
+    async def suggest_code(
+        user_id: str,
+        code_context: str,
+        client: OpenAI = Depends(get_copilot)
+    ):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": code_context}
+            ]
+        )
+        return {"suggestion": response.choices[0].message.content}
+    ```
+  </Card>
+
+  <Card title="CLI Tool" icon="terminal">
+    Create a command-line copilot:
+
+    ```python
+    import click
+    from memori import Memori
+    from openai import OpenAI
+
+    @click.group()
+    def cli():
+        pass
+
+    @cli.command()
+    @click.argument('request')
+    def ask(request):
+        """Ask your copilot for assistance."""
+        client = OpenAI()
+        mem = Memori().llm.register(client)
+        mem.attribution(
+            entity_id="cli_user",
+            process_id="cli_copilot"
+        )
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": request}]
+        )
+        click.echo(response.choices[0].message.content)
+
+    if __name__ == '__main__':
+        cli()
+    ```
+  </Card>
+
+  <Card title="Jupyter Notebook" icon="book">
+    Add memory to Jupyter notebook assistants:
+
+    ```python
+    # In Jupyter cell
+    from memori import Memori
+    from openai import OpenAI
+
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+    mem.attribution(
+        entity_id="data_scientist_jane",
+        process_id="jupyter_copilot"
+    )
+
+    def copilot(request):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": request}]
+        )
+        return response.choices[0].message.content
+
+    # Use throughout notebook
+    copilot("Help me visualize this dataset")
+    ```
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start Broad, Get Specific">
+    Let users teach the copilot their preferences gradually:
+
+    ```python
+    # Session 1: Broad context
+    copilot.assist("I'm building a web API with Python")
+
+    # Session 2: More specific
+    copilot.assist("Using FastAPI with async PostgreSQL")
+
+    # Session 3: Very specific  
+    copilot.assist("Prefer SQLAlchemy 2.0 with declarative models")
+
+    # Future sessions: Copilot knows the full stack
+    ```
+  </Accordion>
+
+  <Accordion title="Use Descriptive Entity IDs">
+    Make entity IDs meaningful for better tracking:
+
+    ```python
+    # Good: Combines user + context
+    entity_id="dev_alice_project_api"
+    entity_id="writer_john_blog_ai"
+    entity_id="analyst_sarah_q1_sales"
+
+    # Avoid: Too generic
+    entity_id="user_1"
+    ```
+  </Accordion>
+
+  <Accordion title="Separate Copilots by Domain">
+    Use different process IDs for different types of assistance:
+
+    ```python
+    # Code assistance
+    mem.attribution(
+        entity_id="dev_alice",
+        process_id="coding_copilot"
+    )
+
+    # Documentation assistance
+    mem.attribution(
+        entity_id="dev_alice",
+        process_id="docs_copilot"
+    )
+
+    # Facts are shared, but conversation contexts are separate
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Session Boundaries Thoughtfully">
+    Use sessions to group related work:
+
+    ```python
+    # Start new session for new feature
+    mem.new_session()
+    copilot.assist("Starting work on user authentication")
+
+    # Multiple interactions in same session
+    copilot.assist("Add password hashing")
+    copilot.assist("Implement JWT tokens")
+
+    # New feature = new session
+    mem.new_session()
+    copilot.assist("Now working on email notifications")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## What Copilots Remember
+
+Memori's Advanced Augmentation automatically extracts:
+
+| Memory Type       | Copilot Application                              |
+| ----------------- | ------------------------------------------------ |
+| **Facts**         | Tech stack, tools, libraries, frameworks         |
+| **Preferences**   | Code style, naming conventions, patterns         |
+| **Skills**        | User expertise level, familiar technologies      |
+| **Attributes**    | Project requirements, architecture decisions     |
+| **Relationships** | How components connect, dependencies             |
+
+All memories are semantically searchable and automatically recalled when relevant.
+
+## Monitoring Copilot Performance
+
+Use the Memori Dashboard to understand what your copilot learns:
+
+1. **Facts View** — See extracted knowledge about user preferences
+2. **Timeline** — Track how context builds over time
+3. **Session History** — Review past interactions
+4. **Graph Explorer** — Visualize relationships between concepts
+
+Visit [app.memorilabs.ai](https://app.memorilabs.ai) to explore your copilot's memory.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chatbots" icon="comments" href="/guides/chatbots">
+    Build conversational bots with memory
+  </Card>
+  <Card title="AI Agents" icon="robot" href="/guides/ai-agents">
+    Create autonomous agents with persistent memory
+  </Card>
+  <Card title="Advanced Augmentation" icon="wand-magic-sparkles" href="/concepts/advanced-augmentation">
+    Learn how memory extraction works
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="/cloud/dashboard">
+    Monitor copilot memory and performance
+  </Card>
+</CardGroup>

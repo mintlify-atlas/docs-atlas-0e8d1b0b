@@ -1,0 +1,410 @@
+---
+title: Agno Integration
+description: Add persistent memory to Agno agents with Memori - supports OpenAI, Claude, Gemini, and xAI models.
+---
+
+# Agno Integration
+
+Memori integrates with Agno at the model layer, automatically capturing all agent interactions including `run()`, `arun()`, and streaming responses to build persistent memory for your AI agents.
+
+## Installation
+
+```bash
+pip install memori agno
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+# Register the Agno model with Memori
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="agno_agent")
+
+agent = Agent(
+    model=model,
+    instructions=["You are a helpful assistant."],
+    markdown=True,
+)
+
+response = agent.run("Hello! My name is Alice.", session_id="chat-001")
+print(response.content)
+```
+
+```python {{ title: 'Async' }}
+import asyncio
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="agno_agent")
+
+agent = Agent(
+    model=model,
+    instructions=["You are a helpful assistant."],
+    markdown=True,
+)
+
+async def main():
+    response = await agent.arun("Hello! My name is Alice.", session_id="chat-001")
+    print(response.content)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="agno_agent")
+
+agent = Agent(
+    model=model,
+    instructions=["You are a helpful assistant."],
+    markdown=True,
+)
+
+stream = agent.run("Tell me a story", session_id="chat-001", stream=True)
+for chunk in stream:
+    if hasattr(chunk, "content") and chunk.content:
+        print(chunk.content, end="")
+```
+
+</CodeGroup>
+
+## Supported Model Providers
+
+Agno supports multiple model providers. Use the matching keyword when registering with Memori:
+
+### OpenAI (GPT Models)
+
+```python
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="gpt_agent")
+```
+
+### Anthropic (Claude)
+
+```python
+from agno.models.anthropic import Claude
+from memori import Memori
+
+model = Claude(id="claude-sonnet-4-20250514")
+mem = Memori().llm.register(claude=model)
+mem.attribution(entity_id="user_123", process_id="claude_agent")
+```
+
+### Google (Gemini)
+
+```python
+from agno.models.google import Gemini
+from memori import Memori
+
+model = Gemini(id="gemini-2.0-flash-exp")
+mem = Memori().llm.register(gemini=model)
+mem.attribution(entity_id="user_123", process_id="gemini_agent")
+```
+
+### xAI (Grok)
+
+```python
+from agno.models.xai import xAI
+from memori import Memori
+
+model = xAI(id="grok-3")
+mem = Memori().llm.register(xai=model)
+mem.attribution(entity_id="user_123", process_id="grok_agent")
+```
+
+## Registration Keywords
+
+| Package                 | Model Class  | Registration Keyword |
+| ----------------------- | ------------ | -------------------- |
+| `agno.models.openai`    | `OpenAIChat` | `openai_chat=model`  |
+| `agno.models.anthropic` | `Claude`     | `claude=model`       |
+| `agno.models.google`    | `Gemini`     | `gemini=model`       |
+| `agno.models.xai`       | `xAI`        | `xai=model`          |
+
+## Working Example
+
+Here's a complete example from the Memori examples directory:
+
+```python
+import os
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
+
+load_dotenv()
+
+# Setup database
+db_path = os.getenv("DATABASE_PATH", "memori_agno.db")
+engine = create_engine(f"sqlite:///{db_path}")
+Session = sessionmaker(bind=engine)
+
+# Create model and register with Memori
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori(conn=Session).llm.register(openai_chat=model)
+mem.attribution(entity_id="customer-456", process_id="support-agent")
+mem.config.storage.build()
+
+# Create agent
+agent = Agent(
+    model=model,
+    instructions=[
+        "You are a helpful customer support agent.",
+        "Remember customer preferences and history from previous conversations.",
+    ],
+    markdown=True,
+)
+
+# First interaction
+response1 = agent.run(
+    "Hi, I'd like to order a large pepperoni pizza with extra cheese"
+)
+print(f"Agent: {response1.content}")
+
+# Second interaction - Memori maintains memory
+response2 = agent.run("Actually, can you remind me what I just ordered?")
+print(f"Agent: {response2.content}")
+
+# Third interaction
+response3 = agent.run("Perfect! And what size was that again?")
+print(f"Agent: {response3.content}")
+
+# Wait for memory augmentation to complete
+mem.augmentation.wait()
+```
+
+## Multi-Session Support
+
+Agno's `session_id` parameter works seamlessly with Memori:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="multi_session")
+
+agent = Agent(model=model, instructions=["Be helpful"])
+
+# Session 1
+response1 = agent.run("My name is Alice", session_id="session-1")
+print(response1.content)
+
+# Session 2 (separate context)
+response2 = agent.run("My name is Bob", session_id="session-2")
+print(response2.content)
+
+# Back to Session 1 - maintains Alice's context
+response3 = agent.run("What's my name?", session_id="session-1")
+print(response3.content)  # "Your name is Alice"
+```
+
+## Agent Tools
+
+Memori captures tool usage in Agno agents:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.tools import tool
+from memori import Memori
+
+@tool
+def get_order_status(order_id: str) -> str:
+    """Get the status of an order."""
+    return f"Order {order_id} is being prepared"
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="agent_with_tools")
+
+agent = Agent(
+    model=model,
+    tools=[get_order_status],
+    instructions=["You are a helpful order tracking assistant."],
+)
+
+response = agent.run("What's the status of order 12345?")
+print(response.content)
+```
+
+## Knowledge Base Integration
+
+Agno agents can use knowledge bases. Memori captures these interactions:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.knowledge import PDFKnowledgeBase
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="kb_agent")
+
+knowledge = PDFKnowledgeBase(
+    path="docs/",
+    vector_db_config={"collection": "documentation"}
+)
+
+agent = Agent(
+    model=model,
+    knowledge=knowledge,
+    instructions=["Answer questions using the knowledge base."],
+)
+
+response = agent.run("What's in the documentation?")
+print(response.content)
+```
+
+## Team of Agents
+
+Memori tracks interactions across Agno agent teams:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.teams import Team
+from memori import Memori
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori().llm.register(openai_chat=model)
+mem.attribution(entity_id="user_123", process_id="agent_team")
+
+# Create specialized agents
+researcher = Agent(
+    model=model,
+    name="Researcher",
+    instructions=["Research topics and gather information."]
+)
+
+writer = Agent(
+    model=model,
+    name="Writer",
+    instructions=["Write clear, concise content."]
+)
+
+team = Team(agents=[researcher, writer])
+response = team.run("Research and write about AI agents")
+print(response.content)
+```
+
+## Supported Features
+
+| Feature              | Support | Method                     |
+| -------------------- | ------- | -------------------------- |
+| **Sync Run**         | ✓       | `agent.run()`              |
+| **Async Run**        | ✓       | `await agent.arun()`       |
+| **Streaming**        | ✓       | `agent.run(stream=True)`   |
+| **Session IDs**      | ✓       | `session_id` parameter     |
+| **Tools**            | ✓       | Automatic                  |
+| **Knowledge Bases**  | ✓       | Automatic                  |
+| **Agent Teams**      | ✓       | Automatic                  |
+| **Multiple Models**  | ✓       | OpenAI, Claude, Gemini, xAI |
+
+## How It Works
+
+When you register an Agno model with Memori:
+
+1. Memori wraps the underlying model client (OpenAI, Anthropic, etc.)
+2. All agent interactions are captured at the model level
+3. Requests and responses flow through Memori transparently
+4. Conversations are stored in your Memori memory store
+5. A knowledge graph is built from conversation patterns
+6. Agno functionality remains unchanged
+
+<Note>
+Memori integrates with Agno at the model level, not the agent level. This ensures all model interactions are captured regardless of how you use Agno's features.
+</Note>
+
+## Real-World Use Case: Customer Support
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from memori import Memori
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+# Setup
+engine = create_engine("sqlite:///support.db")
+Session = sessionmaker(bind=engine)
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+mem = Memori(conn=Session).llm.register(openai_chat=model)
+mem.attribution(entity_id="customer-789", process_id="support-bot")
+mem.config.storage.build()
+
+agent = Agent(
+    model=model,
+    instructions=[
+        "You are a customer support agent.",
+        "Be empathetic and helpful.",
+        "Remember customer history and preferences."
+    ],
+    markdown=True,
+)
+
+# Customer interaction over multiple sessions
+session_id = "support-20250228-001"
+
+response1 = agent.run(
+    "I'm having trouble logging into my account",
+    session_id=session_id
+)
+print(f"Agent: {response1.content}")
+
+response2 = agent.run(
+    "I tried resetting my password but didn't receive the email",
+    session_id=session_id
+)
+print(f"Agent: {response2.content}")
+
+# Later, in a new conversation, Memori helps recall context
+response3 = agent.run(
+    "Hi again, I finally got the reset email working",
+    session_id="support-20250228-002"
+)
+print(f"Agent: {response3.content}")
+
+mem.augmentation.wait()
+```
+
+## Next Steps
+
+- Learn about [Memory Retrieval](/concepts/how-memory-works)
+- Explore [OpenAI Integration](/integrations/openai)
+- See [Multi-User Support](/concepts/multi-user-support)
+- Compare with [Pydantic AI Integration](/integrations/pydantic-ai)

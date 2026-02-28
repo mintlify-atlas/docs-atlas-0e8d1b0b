@@ -1,0 +1,376 @@
+---
+title: LangChain Integration
+description: Add persistent memory to LangChain chat models with Memori - supports OpenAI, Anthropic, Google, and Bedrock.
+---
+
+# LangChain Integration
+
+Memori integrates seamlessly with LangChain chat models, providing persistent memory across any LangChain-supported provider including OpenAI, Anthropic, Google Gemini, and AWS Bedrock.
+
+## Installation
+
+```bash
+pip install memori langchain-openai
+# Or install specific provider packages:
+# pip install langchain-anthropic
+# pip install langchain-google-genai
+# pip install langchain-aws
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+from langchain_openai import ChatOpenAI
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+# Register the LangChain client with Memori
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="langchain_agent")
+
+response = client.invoke("Hello! My name is Alice.")
+print(response.content)
+```
+
+```python {{ title: 'Async' }}
+import asyncio
+from langchain_openai import ChatOpenAI
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="langchain_agent")
+
+async def main():
+    response = await client.ainvoke("Hello! My name is Alice.")
+    print(response.content)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+from langchain_openai import ChatOpenAI
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="langchain_agent")
+
+for chunk in client.stream("Tell me a story"):
+    print(chunk.content, end="")
+```
+
+</CodeGroup>
+
+## Supported Providers
+
+Memori supports all major LangChain chat model providers:
+
+### OpenAI
+
+```python
+from langchain_openai import ChatOpenAI
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="openai")
+
+response = client.invoke("Hello!")
+print(response.content)
+```
+
+### Anthropic
+
+```python
+from langchain_anthropic import ChatAnthropic
+from memori import Memori
+
+client = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+mem = Memori().llm.register(chatanthropic=client)
+mem.attribution(entity_id="user_123", process_id="claude")
+
+response = client.invoke("Hello!")
+print(response.content)
+```
+
+### Google Gemini
+
+```python
+from langchain_google_genai import ChatGoogleGenerativeAI
+from memori import Memori
+
+client = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp")
+mem = Memori().llm.register(chatgooglegenai=client)
+mem.attribution(entity_id="user_123", process_id="gemini")
+
+response = client.invoke("Hello!")
+print(response.content)
+```
+
+### AWS Bedrock
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1"
+)
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="bedrock")
+
+response = client.invoke("Hello!")
+print(response.content)
+```
+
+## Registration Keywords
+
+Each LangChain provider has a specific registration keyword:
+
+| Package                  | Chat Model               | Registration Keyword     |
+| ------------------------ | ------------------------ | ------------------------ |
+| `langchain-openai`       | `ChatOpenAI`             | `chatopenai=client`      |
+| `langchain-anthropic`    | `ChatAnthropic`          | `chatanthropic=client`   |
+| `langchain-google-genai` | `ChatGoogleGenerativeAI` | `chatgooglegenai=client` |
+| `langchain-aws`          | `ChatBedrock`            | `chatbedrock=client`     |
+| `langchain-google-vertexai` | `ChatVertexAI`        | `chatvertexai=client`    |
+
+## Multi-Turn Conversations
+
+LangChain provides message types for structured conversations. Memori captures all turns:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_456", process_id="conversation")
+
+messages = [
+    SystemMessage(content="You are a helpful assistant."),
+    HumanMessage(content="My name is Alice.")
+]
+
+# First turn
+response = client.invoke(messages)
+messages.append(AIMessage(content=response.content))
+
+# Second turn - memory is maintained
+messages.append(HumanMessage(content="What's my name?"))
+response = client.invoke(messages)
+print(response.content)
+# Output: Your name is Alice.
+```
+
+## LangChain Agents
+
+Memori works seamlessly with LangChain agents:
+
+```python
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain_openai import ChatOpenAI
+from langchain.tools import tool
+from langchain import hub
+from memori import Memori
+
+# Define a tool
+@tool
+def get_user_preference(user_id: str) -> str:
+    """Get user preferences from database."""
+    return f"User {user_id} prefers dark mode"
+
+# Create agent
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="react_agent")
+
+prompt = hub.pull("hwchase17/react")
+agent = create_react_agent(client, [get_user_preference], prompt)
+agent_executor = AgentExecutor(agent=agent, tools=[get_user_preference])
+
+result = agent_executor.invoke({
+    "input": "What are my preferences?"
+})
+print(result["output"])
+```
+
+## LangChain Chains
+
+Memori captures interactions in LangChain chains:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema.runnable import RunnablePassthrough
+from memori import Memori
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="chain")
+
+prompt = ChatPromptTemplate.from_template(
+    "You are a {role}. {input}"
+)
+
+chain = (
+    {"role": RunnablePassthrough(), "input": RunnablePassthrough()}
+    | prompt
+    | client
+)
+
+response = chain.invoke({
+    "role": "helpful assistant",
+    "input": "Explain LangChain"
+})
+print(response.content)
+```
+
+## Streaming with Callbacks
+
+Memori captures streamed responses even when using callbacks:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from memori import Memori
+
+client = ChatOpenAI(
+    model="gpt-4o-mini",
+    streaming=True,
+    callbacks=[StreamingStdOutCallbackHandler()]
+)
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="streaming")
+
+response = client.invoke("Tell me a joke")
+print("\n" + response.content)
+```
+
+## Tool Binding
+
+LangChain's tool binding feature works seamlessly with Memori:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.tools import tool
+from memori import Memori
+
+@tool
+def get_weather(location: str) -> str:
+    """Get current weather for a location."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="tools")
+
+client_with_tools = client.bind_tools([get_weather])
+response = client_with_tools.invoke("What's the weather in Paris?")
+
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        print(f"Tool: {tool_call['name']}")
+        print(f"Args: {tool_call['args']}")
+```
+
+## Structured Output
+
+Memori captures structured outputs via LangChain:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+from memori import Memori
+
+class Person(BaseModel):
+    name: str = Field(description="Person's name")
+    age: int = Field(description="Person's age")
+
+client = ChatOpenAI(model="gpt-4o-mini")
+
+mem = Memori().llm.register(chatopenai=client)
+mem.attribution(entity_id="user_123", process_id="structured")
+
+parser = PydanticOutputParser(pydantic_object=Person)
+client_with_parser = client.with_structured_output(Person)
+
+response = client_with_parser.invoke(
+    "Extract: Alice is 30 years old"
+)
+print(f"Name: {response.name}, Age: {response.age}")
+```
+
+## Supported Features
+
+| Feature               | Support | Method                   |
+| --------------------- | ------- | ------------------------ |
+| **Sync Client**       | ✓       | `client.invoke()`        |
+| **Async Client**      | ✓       | `await client.ainvoke()` |
+| **Streaming**         | ✓       | `client.stream()`        |
+| **Agents**            | ✓       | AgentExecutor            |
+| **Chains**            | ✓       | LCEL chains              |
+| **Tools**             | ✓       | `bind_tools()`           |
+| **Structured Output** | ✓       | `with_structured_output()` |
+| **Callbacks**         | ✓       | Automatic                |
+
+## How It Works
+
+When you register a LangChain chat model with Memori:
+
+1. Memori wraps the underlying provider's client (OpenAI, Anthropic, etc.)
+2. All LangChain invocations are captured at the client level
+3. Requests and responses flow through Memori transparently
+4. Conversations are stored in your Memori memory store
+5. A knowledge graph is built from conversation patterns
+6. LangChain functionality remains unchanged
+
+<Note>
+Memori integrates at the LangChain client level, not the LangChain abstraction level. This ensures compatibility with all LangChain features including agents, chains, and tools.
+</Note>
+
+## Multiple Providers
+
+You can register multiple LangChain providers with the same Memori instance:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from memori import Memori
+
+mem = Memori()
+
+# Register multiple providers
+openai_client = ChatOpenAI(model="gpt-4o-mini")
+anthropic_client = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+
+mem.llm.register(chatopenai=openai_client)
+mem.llm.register(chatanthropic=anthropic_client)
+
+mem.attribution(entity_id="user_123", process_id="multi_provider")
+
+# Use either client
+response1 = openai_client.invoke("Hello from GPT")
+response2 = anthropic_client.invoke("Hello from Claude")
+```
+
+## Next Steps
+
+- Learn about [Memory Retrieval](/concepts/how-memory-works)
+- Explore [OpenAI Integration](/integrations/openai)
+- Compare with [Anthropic Integration](/integrations/anthropic)
+- See [AWS Bedrock Integration](/integrations/aws-bedrock)

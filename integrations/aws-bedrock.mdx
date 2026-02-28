@@ -1,0 +1,319 @@
+---
+title: AWS Bedrock Integration
+description: Add persistent memory to AWS Bedrock models with Memori through LangChain - supports Claude, Llama, Mistral, and more.
+---
+
+# AWS Bedrock Integration
+
+Memori integrates with AWS Bedrock through the LangChain `ChatBedrock` adapter, providing memory for Claude, Llama, Mistral, and other Bedrock-hosted models.
+
+## Installation
+
+```bash
+pip install memori langchain-aws boto3
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1"
+)
+
+# Register the Bedrock client with Memori
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="bedrock_agent")
+
+response = client.invoke("Hello! My name is Alice.")
+print(response.content)
+```
+
+```python {{ title: 'Async' }}
+import asyncio
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="bedrock_agent")
+
+async def main():
+    response = await client.ainvoke("Hello! My name is Alice.")
+    print(response.content)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="bedrock_agent")
+
+for chunk in client.stream("Tell me a story"):
+    print(chunk.content, end="")
+```
+
+</CodeGroup>
+
+## AWS Configuration
+
+Bedrock requires AWS credentials. Configure them using environment variables or AWS CLI:
+
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="us-east-1"
+```
+
+Or pass credentials directly:
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+import boto3
+
+session = boto3.Session(
+    aws_access_key_id="your-access-key",
+    aws_secret_access_key="your-secret-key",
+    region_name="us-east-1"
+)
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    client=session.client("bedrock-runtime")
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="bedrock_secure")
+```
+
+## Available Models
+
+Memori supports all Bedrock models through ChatBedrock:
+
+### Anthropic Claude
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+# Claude Sonnet 3.5
+client = ChatBedrock(
+    model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="claude_sonnet")
+```
+
+### Meta Llama
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+# Llama 3.1 70B
+client = ChatBedrock(
+    model_id="meta.llama3-1-70b-instruct-v1:0",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="llama")
+```
+
+### Mistral
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+# Mistral Large
+client = ChatBedrock(
+    model_id="mistral.mistral-large-2407-v1:0",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="mistral")
+```
+
+## Multi-Turn Conversations
+
+LangChain provides conversation history management:
+
+```python
+from langchain_aws import ChatBedrock
+from langchain.schema import HumanMessage, AIMessage
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_456", process_id="chat")
+
+messages = []
+
+# First turn
+messages.append(HumanMessage(content="My favorite programming language is Python."))
+response = client.invoke(messages)
+messages.append(AIMessage(content=response.content))
+
+# Second turn - memory maintained
+messages.append(HumanMessage(content="What's my favorite language?"))
+response = client.invoke(messages)
+print(response.content)
+```
+
+## Model-Specific Parameters
+
+Configure model-specific parameters through `model_kwargs`:
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1",
+    model_kwargs={
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "max_tokens": 2048
+    }
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="custom_params")
+
+response = client.invoke("Explain quantum computing")
+print(response.content)
+```
+
+## Tool Use / Function Calling
+
+Bedrock models support function calling:
+
+```python
+from langchain_aws import ChatBedrock
+from langchain.tools import tool
+from memori import Memori
+
+@tool
+def get_weather(location: str) -> str:
+    """Get the current weather for a location."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1"
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="tools")
+
+client_with_tools = client.bind_tools([get_weather])
+response = client_with_tools.invoke("What's the weather in Seattle?")
+
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        print(f"Tool: {tool_call['name']}")
+        print(f"Args: {tool_call['args']}")
+```
+
+## Streaming Responses
+
+Stream responses for real-time applications:
+
+```python
+from langchain_aws import ChatBedrock
+from memori import Memori
+
+client = ChatBedrock(
+    model_id="anthropic.claude-sonnet-4-5-20250929",
+    region_name="us-east-1",
+    streaming=True
+)
+
+mem = Memori().llm.register(chatbedrock=client)
+mem.attribution(entity_id="user_123", process_id="streaming")
+
+for chunk in client.stream("Write a poem about AI"):
+    print(chunk.content, end="", flush=True)
+```
+
+## Supported Features
+
+| Feature              | Support | Method                   |
+| -------------------- | ------- | ------------------------ |
+| **Sync Client**      | ✓       | `client.invoke()`        |
+| **Async Client**     | ✓       | `await client.ainvoke()` |
+| **Streaming**        | ✓       | `client.stream()`        |
+| **Tool Use**         | ✓       | `bind_tools()`           |
+| **System Prompts**   | ✓       | LangChain message types  |
+| **Custom Parameters** | ✓       | `model_kwargs`           |
+| **Cross-Region**     | ✓       | `region_name` parameter  |
+
+## How It Works
+
+When you register a ChatBedrock client with Memori:
+
+1. Memori wraps the Bedrock runtime client's `invoke_model` methods
+2. All requests (model ID, messages, parameters) are captured
+3. All responses are captured, including streaming chunks
+4. Conversations are stored in your Memori memory store
+5. A knowledge graph is built from conversation patterns
+6. Original LangChain behavior is preserved
+
+<Note>
+Memori captures streaming responses by collecting chunks and reconstructing the full conversation after streaming completes.
+</Note>
+
+## Supported Model Families
+
+| Provider          | Model Family      | Example Model ID                              |
+| ----------------- | ----------------- | --------------------------------------------- |
+| **Anthropic**     | Claude            | `anthropic.claude-3-5-sonnet-20241022-v2:0`   |
+| **Meta**          | Llama             | `meta.llama3-1-70b-instruct-v1:0`             |
+| **Mistral**       | Mistral           | `mistral.mistral-large-2407-v1:0`             |
+| **Amazon**        | Titan             | `amazon.titan-text-premier-v1:0`              |
+| **AI21 Labs**     | Jurassic          | `ai21.j2-ultra-v1`                            |
+| **Cohere**        | Command           | `cohere.command-text-v14`                     |
+
+## Regional Availability
+
+Bedrock models are available in specific AWS regions. Common regions:
+
+- `us-east-1` (N. Virginia)
+- `us-west-2` (Oregon)
+- `eu-west-1` (Ireland)
+- `ap-southeast-1` (Singapore)
+
+Check [AWS Bedrock documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/models-regions.html) for current availability.
+
+## Next Steps
+
+- Learn about [LangChain Integration](/integrations/langchain)
+- Explore [Memory Augmentation](/concepts/advanced-augmentation)
+- Compare with [Anthropic Integration](/integrations/anthropic)

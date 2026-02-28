@@ -1,0 +1,295 @@
+---
+title: 'Basic Memory Capture and Recall'
+description: 'Learn how to capture and recall memories with Memori across conversations'
+icon: 'brain'
+---
+
+## Overview
+
+Memori automatically captures information from conversations and recalls it when relevant. This guide shows you how to get started with basic memory operations.
+
+## Quick Start
+
+<Tabs>
+  <Tab title="Python">
+    <Steps>
+      <Step title="Install Memori">
+        ```bash
+        pip install memori
+        ```
+      </Step>
+
+      <Step title="Set up your environment">
+        ```bash
+        export OPENAI_API_KEY="your-api-key"
+        export MEMORI_API_KEY="your-memori-api-key"
+        ```
+      </Step>
+
+      <Step title="Create your first memory-enabled app">
+        ```python
+        from openai import OpenAI
+        from memori import Memori
+
+        # Initialize OpenAI client
+        client = OpenAI()
+
+        # Initialize Memori and register the LLM client
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id="user-123", process_id="my-app")
+
+        # First conversation - establish facts
+        response1 = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": "My favorite color is blue and I live in Paris"}
+            ],
+        )
+        print(response1.choices[0].message.content)
+
+        # Second conversation - Memori recalls context automatically
+        response2 = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "What's my favorite color?"}],
+        )
+        print(response2.choices[0].message.content)  # Output: "Your favorite color is blue"
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="TypeScript">
+    <Steps>
+      <Step title="Install Memori">
+        ```bash
+        npm install memori openai
+        ```
+      </Step>
+
+      <Step title="Set up your environment">
+        ```bash
+        export OPENAI_API_KEY="your-api-key"
+        export MEMORI_API_KEY="your-memori-api-key"
+        ```
+      </Step>
+
+      <Step title="Create your first memory-enabled app">
+        ```typescript
+        import { OpenAI } from 'openai';
+        import { Memori } from 'memori';
+
+        // Initialize OpenAI client
+        const client = new OpenAI();
+
+        // Initialize Memori and register the LLM client
+        const mem = new Memori().llm.register(client);
+        mem.attribution('user-123', 'my-app');
+
+        async function main() {
+          // First conversation - establish facts
+          const response1 = await client.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'user', content: 'My favorite color is blue and I live in Paris' }
+            ],
+          });
+          console.log(response1.choices[0]?.message?.content);
+
+          // Give the cloud API a brief moment to index the new memory
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
+          // Second conversation - Memori recalls context automatically
+          const response2 = await client.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: "What's my favorite color?" }],
+          });
+          console.log(response2.choices[0]?.message?.content); // Output: "Your favorite color is blue"
+        }
+
+        main().catch(console.error);
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Using Self-Hosted Storage
+
+For production use cases, you can use your own database instead of Memori Cloud.
+
+<Tabs>
+  <Tab title="SQLite">
+    ```python
+    from openai import OpenAI
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from memori import Memori
+
+    # Setup OpenAI
+    client = OpenAI()
+
+    # Setup SQLite database
+    engine = create_engine("sqlite:///memori.db")
+    Session = sessionmaker(bind=engine)
+
+    # Setup Memori with SQLite
+    mem = Memori(conn=Session).llm.register(client)
+    mem.attribution(entity_id="user-123", process_id="my-app")
+    mem.config.storage.build()  # Create tables
+
+    # Use normally - memories are stored locally
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "I prefer morning meetings"}],
+    )
+    print(response.choices[0].message.content)
+
+    # Wait for augmentation to complete (important for short-lived scripts)
+    mem.augmentation.wait()
+    ```
+  </Tab>
+
+  <Tab title="PostgreSQL">
+    ```python
+    from openai import OpenAI
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from memori import Memori
+
+    # Setup OpenAI
+    client = OpenAI()
+
+    # Setup PostgreSQL database
+    connection_string = "postgresql://user:password@localhost:5432/memori"
+    engine = create_engine(connection_string)
+    Session = sessionmaker(bind=engine)
+
+    # Setup Memori with PostgreSQL
+    mem = Memori(conn=Session).llm.register(client)
+    mem.attribution(entity_id="user-123", process_id="my-app")
+    mem.config.storage.build()
+
+    # Use normally
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "I'm allergic to peanuts"}],
+    )
+    print(response.choices[0].message.content)
+
+    mem.augmentation.wait()
+    ```
+  </Tab>
+
+  <Tab title="MongoDB">
+    ```python
+    from openai import OpenAI
+    from pymongo import MongoClient
+    from memori import Memori
+
+    # Setup OpenAI
+    client = OpenAI()
+
+    # Setup MongoDB
+    mongo_client = MongoClient("mongodb://localhost:27017/")
+    db = mongo_client["memori"]
+
+    # Setup Memori with MongoDB
+    mem = Memori(conn=lambda: db).llm.register(client)
+    mem.attribution(entity_id="user-123", process_id="my-app")
+    mem.config.storage.build()
+
+    # Use normally
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "I speak English and Spanish"}],
+    )
+    print(response.choices[0].message.content)
+
+    mem.augmentation.wait()
+    ```
+  </Tab>
+</Tabs>
+
+## Manual Recall
+
+You can manually retrieve relevant memories without making an LLM call.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from memori import Memori
+
+    mem = Memori()
+    mem.attribution(entity_id="user-123")
+
+    # Manually search for relevant facts
+    facts = mem.recall("What are my preferences?")
+
+    for fact in facts:
+        print(f"- {fact['content']}")
+        print(f"  Relevance: {fact.get('score', 0):.2f}")
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { Memori } from 'memori';
+
+    const mem = new Memori();
+    mem.attribution('user-123');
+
+    // Manually search for relevant facts
+    const facts = await mem.recall('What are my preferences?');
+
+    facts.forEach((fact) => {
+      console.log(`- ${fact.content}`);
+      console.log(`  Relevance: ${fact.score?.toFixed(2)}`);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## How It Works
+
+<Steps>
+  <Step title="Capture">
+    When you make an LLM call, Memori automatically captures the conversation in the background.
+  </Step>
+
+  <Step title="Extract">
+    Memori analyzes the conversation and extracts key facts about the user (preferences, context, history).
+  </Step>
+
+  <Step title="Recall">
+    On subsequent conversations, Memori searches for relevant facts and injects them into the system prompt.
+  </Step>
+
+  <Step title="Context">
+    Your LLM receives enriched context automatically, enabling it to remember past interactions.
+  </Step>
+</Steps>
+
+## Best Practices
+
+<Card title="Set Entity IDs" icon="user">
+  Always call `attribution()` with an `entity_id` to ensure memories are properly associated with each user.
+</Card>
+
+<Card title="Wait for Augmentation" icon="clock">
+  For short-lived scripts, call `mem.augmentation.wait()` before exiting to ensure memories are fully processed.
+</Card>
+
+<Card title="Use Meaningful Process IDs" icon="tag">
+  Set a `process_id` to segment memories by application or workflow (e.g., "support-chat", "onboarding").
+</Card>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multi-User Management" icon="users" href="/examples/multi-user">
+    Learn how to manage memories for multiple users
+  </Card>
+  <Card title="Streaming" icon="wave-pulse" href="/examples/streaming">
+    Use Memori with streaming responses
+  </Card>
+</CardGroup>

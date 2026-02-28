@@ -1,0 +1,480 @@
+---
+title: Pydantic AI Integration
+description: Add persistent memory to Pydantic AI agents with Memori - supports all Pydantic AI models with type-safe interfaces.
+---
+
+# Pydantic AI Integration
+
+Memori integrates with Pydantic AI at the agent level, automatically capturing all interactions through `run_sync()` and `run()` to build persistent memory for your type-safe AI agents.
+
+## Installation
+
+```bash
+pip install memori pydantic-ai
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("openai:gpt-4o-mini")
+
+# Register the Pydantic AI agent with Memori
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="pydantic_agent")
+
+result = agent.run_sync("Hello! My name is Alice.")
+print(result.output)
+```
+
+```python {{ title: 'Async' }}
+import asyncio
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("openai:gpt-4o-mini")
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="pydantic_agent")
+
+async def main():
+    result = await agent.run("Hello! My name is Alice.")
+    print(result.output)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+import asyncio
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("openai:gpt-4o-mini")
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="pydantic_agent")
+
+async def main():
+    async with agent.run_stream("Tell me a story") as response:
+        async for chunk in response.stream_text():
+            print(chunk, end="")
+
+asyncio.run(main())
+```
+
+</CodeGroup>
+
+## Supported Model Providers
+
+Pydantic AI supports multiple providers via model strings. Memori works with all of them:
+
+### OpenAI
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("openai:gpt-4o-mini")
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="openai")
+
+result = agent.run_sync("Hello!")
+print(result.output)
+```
+
+### Anthropic
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("anthropic:claude-sonnet-4-5-20250929")
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="claude")
+
+result = agent.run_sync("Hello!")
+print(result.output)
+```
+
+### Google Gemini
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("google-gla:gemini-2.0-flash-exp")
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="gemini")
+
+result = agent.run_sync("Hello!")
+print(result.output)
+```
+
+### Groq
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("groq:llama-3.1-70b-versatile")
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="groq")
+
+result = agent.run_sync("Hello!")
+print(result.output)
+```
+
+## Type-Safe Results
+
+Pydantic AI's structured outputs work seamlessly with Memori:
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+from pydantic import BaseModel
+
+class UserInfo(BaseModel):
+    name: str
+    age: int
+    interests: list[str]
+
+agent = Agent(
+    "openai:gpt-4o-mini",
+    result_type=UserInfo,
+    system_prompt="Extract user information from the text."
+)
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="structured")
+
+result = agent.run_sync(
+    "My name is Alice, I'm 28 years old, and I love hiking and photography."
+)
+
+user_info: UserInfo = result.output
+print(f"Name: {user_info.name}")
+print(f"Age: {user_info.age}")
+print(f"Interests: {', '.join(user_info.interests)}")
+```
+
+## Agent with Dependencies
+
+Memori captures interactions even when using Pydantic AI's dependency injection:
+
+```python
+import asyncio
+from dataclasses import dataclass
+from memori import Memori
+from pydantic_ai import Agent, RunContext
+
+@dataclass
+class DatabaseDeps:
+    user_id: str
+    
+    def get_user_data(self) -> dict:
+        return {"name": "Alice", "subscription": "premium"}
+
+agent = Agent(
+    "openai:gpt-4o-mini",
+    deps_type=DatabaseDeps,
+    system_prompt="You are a personalized assistant."
+)
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_456", process_id="deps_agent")
+
+@agent.tool
+async def get_user_info(ctx: RunContext[DatabaseDeps]) -> dict:
+    """Get user information from database."""
+    return ctx.deps.get_user_data()
+
+async def main():
+    deps = DatabaseDeps(user_id="user_456")
+    result = await agent.run(
+        "What's my subscription status?",
+        deps=deps
+    )
+    print(result.output)
+
+asyncio.run(main())
+```
+
+## Agent Tools
+
+Memori automatically captures tool usage:
+
+```python
+import asyncio
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("openai:gpt-4o-mini")
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="tools")
+
+@agent.tool
+async def get_weather(location: str) -> str:
+    """Get the current weather for a location."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+@agent.tool
+async def get_time(timezone: str) -> str:
+    """Get the current time in a timezone."""
+    from datetime import datetime
+    return f"Time in {timezone}: {datetime.now().strftime('%I:%M %p')}"
+
+async def main():
+    result = await agent.run("What's the weather and time in Paris?")
+    print(result.output)
+
+asyncio.run(main())
+```
+
+## System Prompts and Instructions
+
+Memori captures system prompts and instructions:
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent(
+    "openai:gpt-4o-mini",
+    system_prompt="""
+    You are an expert Python developer.
+    Provide concise, production-ready code.
+    Always include docstrings and type hints.
+    """
+)
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="dev_001", process_id="code_assistant")
+
+result = agent.run_sync("Write a function to validate email addresses")
+print(result.output)
+```
+
+## Multi-Turn Conversations
+
+Pydantic AI supports conversation history. Memori tracks all turns:
+
+```python
+import asyncio
+from memori import Memori
+from pydantic_ai import Agent
+from pydantic_ai.messages import ModelMessage, UserMessage
+
+agent = Agent("openai:gpt-4o-mini")
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_789", process_id="conversation")
+
+async def main():
+    messages: list[ModelMessage] = []
+    
+    # First turn
+    result1 = await agent.run(
+        "My favorite color is blue.",
+        message_history=messages
+    )
+    messages.extend(result1.new_messages())
+    print(result1.output)
+    
+    # Second turn - memory maintained
+    result2 = await agent.run(
+        "What's my favorite color?",
+        message_history=messages
+    )
+    messages.extend(result2.new_messages())
+    print(result2.output)
+
+asyncio.run(main())
+```
+
+## Validation and Retries
+
+Memori captures validation failures and retries:
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+from pydantic import BaseModel, Field, ValidationError
+
+class Temperature(BaseModel):
+    value: float = Field(ge=-273.15, le=1000)
+    unit: str = Field(pattern=r'^(C|F|K)$')
+
+agent = Agent(
+    "openai:gpt-4o-mini",
+    result_type=Temperature,
+    system_prompt="Extract temperature data."
+)
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="validation")
+
+try:
+    result = agent.run_sync("The temperature is 25 degrees Celsius")
+    print(f"Temperature: {result.output.value}°{result.output.unit}")
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+```
+
+## Streaming Responses
+
+Memori captures streaming responses:
+
+```python
+import asyncio
+from memori import Memori
+from pydantic_ai import Agent
+
+agent = Agent("openai:gpt-4o-mini")
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="streaming")
+
+async def main():
+    async with agent.run_stream("Write a poem about AI") as response:
+        async for chunk in response.stream_text():
+            print(chunk, end="", flush=True)
+        print("\n")
+        
+        # Get final result
+        result = await response.get_result()
+        print(f"\nComplete output: {result.output}")
+
+asyncio.run(main())
+```
+
+## Usage with Result Validation
+
+Memori tracks result validators:
+
+```python
+from memori import Memori
+from pydantic_ai import Agent
+from pydantic import BaseModel
+
+class CodeSnippet(BaseModel):
+    language: str
+    code: str
+    
+    @property
+    def is_python(self) -> bool:
+        return self.language.lower() == "python"
+
+agent = Agent(
+    "openai:gpt-4o-mini",
+    result_type=CodeSnippet,
+    result_validators=[lambda x: x.is_python or "Only Python code allowed"]
+)
+
+mem = Memori().llm.register(agent)
+mem.attribution(entity_id="user_123", process_id="validators")
+
+result = agent.run_sync("Write a hello world program in Python")
+print(result.output.code)
+```
+
+## Supported Features
+
+| Feature                | Support | Method                      |
+| ---------------------- | ------- | --------------------------- |
+| **Sync Run**           | ✓       | `agent.run_sync()`          |
+| **Async Run**          | ✓       | `await agent.run()`         |
+| **Streaming**          | ✓       | `agent.run_stream()`        |
+| **Structured Output**  | ✓       | `result_type` parameter     |
+| **Tools**              | ✓       | `@agent.tool` decorator     |
+| **Dependencies**       | ✓       | `deps_type` parameter       |
+| **System Prompts**     | ✓       | `system_prompt` parameter   |
+| **Validation**         | ✓       | Pydantic validators         |
+| **Retries**            | ✓       | Automatic                   |
+| **Multiple Models**    | ✓       | All Pydantic AI models      |
+
+## How It Works
+
+When you register a Pydantic AI agent with Memori:
+
+1. Memori wraps the underlying model client used by the agent
+2. All agent interactions are captured transparently
+3. Requests, responses, tools, and validations are tracked
+4. Conversations are stored in your Memori memory store
+5. A knowledge graph is built from conversation patterns
+6. Pydantic AI functionality remains unchanged
+
+<Note>
+Memori integrates with Pydantic AI by wrapping the OpenAI client used internally. Registration happens at the agent level for convenience, but capturing occurs at the model client level.
+</Note>
+
+## Real-World Example: Data Extraction Service
+
+```python
+import asyncio
+from memori import Memori
+from pydantic_ai import Agent
+from pydantic import BaseModel, Field
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+# Data models
+class Invoice(BaseModel):
+    invoice_number: str
+    date: str
+    total: float = Field(gt=0)
+    vendor: str
+    items: list[str]
+
+# Setup
+engine = create_engine("sqlite:///invoices.db")
+Session = sessionmaker(bind=engine)
+
+agent = Agent(
+    "openai:gpt-4o-mini",
+    result_type=Invoice,
+    system_prompt="Extract invoice information from text."
+)
+
+mem = Memori(conn=Session).llm.register(agent)
+mem.attribution(entity_id="finance_bot", process_id="invoice_processor")
+mem.config.storage.build()
+
+async def process_invoice(text: str) -> Invoice:
+    result = await agent.run(text)
+    return result.output
+
+async def main():
+    invoice_text = """
+    INVOICE #INV-2025-001
+    Date: February 28, 2025
+    Vendor: Acme Corp
+    
+    Items:
+    - Widget A: $50.00
+    - Widget B: $30.00
+    
+    Total: $80.00
+    """
+    
+    invoice = await process_invoice(invoice_text)
+    print(f"Invoice: {invoice.invoice_number}")
+    print(f"Vendor: {invoice.vendor}")
+    print(f"Total: ${invoice.total}")
+    print(f"Items: {', '.join(invoice.items)}")
+    
+    mem.augmentation.wait()
+
+asyncio.run(main())
+```
+
+## Next Steps
+
+- Learn about [Memory Retrieval](/concepts/how-memory-works)
+- Explore [Structured Data](/concepts/advanced-augmentation)
+- Compare with [Agno Integration](/integrations/agno)
+- See [OpenAI Integration](/integrations/openai)

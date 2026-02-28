@@ -1,0 +1,397 @@
+---
+title: Quota Management
+description: Monitor and optimize your Memori memory quota and usage
+---
+
+Memori Advanced Augmentation uses a quota system to manage memory storage and API usage. Understanding and managing your quota ensures uninterrupted service and optimal performance.
+
+## Understanding Quotas
+
+### What Counts Toward Your Quota
+
+Your quota tracks the number of **memories** stored across all entities, processes, and sessions:
+
+- **Conversation turns** - Each LLM interaction
+- **Augmented memories** - Extracted facts, preferences, events, etc.
+- **Session data** - Grouped interactions
+- **Embeddings** - Vector representations for semantic search
+
+### Quota Tiers
+
+Memori provides different quota tiers based on your authentication method:
+
+| Tier | Authentication | Max Memories | Best For |
+|------|----------------|--------------|----------|
+| **IP-Based** | None (anonymous) | 1,000 | Testing, evaluation |
+| **Free Developer** | API key | 100,000 | Development, small projects |
+| **Enterprise** | Custom | Unlimited | Production deployments |
+
+<Tip>
+Memori Advanced Augmentation is **always free for developers**. Sign up for an API key to increase your quota from 1,000 to 100,000 memories.
+</Tip>
+
+## Checking Your Quota
+
+### Using the CLI
+
+The fastest way to check your quota:
+
+```bash
+python -m memori quota
+```
+
+**Example Output:**
+```
+ __  __                           _ 
+|  \/  | ___ _ __ ___   ___  _ __(_)
+| |\/| |/ _ \ '_ ` _ \ / _ \| '__| |
+| |  | |  __/ | | | | | (_) | |  | |
+|_|  |_|\___|_| |_| |_|\___/|_|  |_|
+                  perfectam memoriam
+                       memorilabs.ai
+                            v3.2.1
+
++ Maximum # of Memories: 100,000
++ Current # of Memories: 45,678
+
++ You are currently using 45.68% of your quota.
+```
+
+### Using the Dashboard
+
+Visit [app.memorilabs.ai](https://app.memorilabs.ai) to:
+
+- View real-time quota usage
+- Browse all stored memories
+- Analyze memory distribution by entity and process
+- Track usage trends over time
+- Export memory data
+
+### Programmatic Quota Checking
+
+You can check quota programmatically by calling the Memori API:
+
+```python
+import os
+import requests
+
+api_key = os.getenv("MEMORI_API_KEY")
+headers = {"Authorization": f"Bearer {api_key}"}
+
+response = requests.get(
+    "https://api.memorilabs.ai/v1/sdk/quota",
+    headers=headers
+)
+
+quota = response.json()
+print(f"Using {quota['memories']['num']} of {quota['memories']['max']} memories")
+print(f"Percentage: {(quota['memories']['num'] / quota['memories']['max']) * 100:.2f}%")
+```
+
+## Quota Optimization Strategies
+
+### 1. Efficient Entity and Process Attribution
+
+Proper attribution prevents duplicate memories and improves organization:
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+mem = Memori()
+client = mem.llm.register(OpenAI())
+
+# Good: Specific attribution per user and process
+mem.attribution(
+    entity_id=f"user_{user.id}",
+    process_id="customer_support_agent"
+)
+
+# Avoid: Generic attribution creates noise
+mem.attribution(
+    entity_id="default",
+    process_id="main"
+)
+```
+
+<Tip>
+**Best Practice:** Use unique entity IDs for each user and descriptive process IDs for different agent types. This improves memory recall accuracy and makes quota usage more transparent.
+</Tip>
+
+### 2. Session Management
+
+Group related interactions into sessions to optimize memory storage:
+
+```python
+# Start a new session for a distinct conversation
+mem.new_session()
+
+# Process multiple related interactions
+for message in conversation:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": message}]
+    )
+
+# Explicitly start a new session for a new topic
+mem.new_session()
+```
+
+### 3. Recall Limits and Thresholds
+
+Configure recall settings to balance performance and quota usage:
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+# Adjust recall limits
+mem.config.recall_embeddings_limit = 500  # Default: 1000
+mem.config.recall_facts_limit = 3          # Default: 5
+mem.config.recall_relevance_threshold = 0.2  # Default: 0.1
+```
+
+<Accordion title="Configuration options explained">
+
+- **recall_embeddings_limit**: Maximum number of embeddings to search during recall. Lower values = faster queries, potentially less accurate recall.
+- **recall_facts_limit**: Maximum number of facts to include in augmentation. Lower values = less context, faster processing.
+- **recall_relevance_threshold**: Minimum similarity score (0-1) for memories to be recalled. Higher values = more selective recall.
+
+</Accordion>
+
+### 4. Environment Variables for Global Configuration
+
+Set quota-related configuration via environment variables:
+
+```bash
+# Reduce embeddings search space (lower quota usage)
+export MEMORI_RECALL_EMBEDDINGS_LIMIT=500
+
+# Use a more efficient embedding model
+export MEMORI_EMBEDDINGS_MODEL="all-MiniLM-L6-v2"
+```
+
+## Monitoring Quota Usage
+
+### Set Up Alerts
+
+Create a monitoring script to alert when approaching quota limits:
+
+```python
+import os
+import requests
+from datetime import datetime
+
+def check_quota_and_alert(threshold=0.9):
+    """Alert if quota usage exceeds threshold (default 90%)"""
+    api_key = os.getenv("MEMORI_API_KEY")
+    headers = {"Authorization": f"Bearer {api_key}"}
+    
+    response = requests.get(
+        "https://api.memorilabs.ai/v1/sdk/quota",
+        headers=headers
+    )
+    
+    quota = response.json()
+    usage = quota['memories']['num'] / quota['memories']['max']
+    
+    if usage >= threshold:
+        print(f"⚠️  WARNING: Quota at {usage*100:.1f}%")
+        print(f"   Using {quota['memories']['num']:,} of {quota['memories']['max']:,} memories")
+        print(f"   Timestamp: {datetime.now().isoformat()}")
+        # Send alert (email, Slack, etc.)
+        return True
+    
+    print(f"✓ Quota OK: {usage*100:.1f}%")
+    return False
+
+if __name__ == "__main__":
+    check_quota_and_alert(threshold=0.9)
+```
+
+### Integrate with CI/CD
+
+Add quota checks to your deployment pipeline:
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Check Memori Quota
+        env:
+          MEMORI_API_KEY: ${{ secrets.MEMORI_API_KEY }}
+        run: |
+          pip install memori requests
+          python -m memori quota
+          python scripts/check_quota.py  # Custom quota check script
+```
+
+## Handling Quota Limits
+
+### What Happens When You Reach Your Quota
+
+When you reach your quota limit:
+
+1. **Existing memories** continue to be recalled normally
+2. **New memories** are not created (no errors, graceful degradation)
+3. **You receive email notification** (for API key holders)
+4. **LLM interactions continue** but without memory augmentation
+
+<Warning>
+Memori will **not throw errors** when quota is exceeded. Instead, it gracefully degrades to operate without creating new memories. Monitor your quota to avoid unexpected behavior.
+</Warning>
+
+### Increasing Your Quota
+
+<Steps>
+
+<Step title="Sign up for an API key">
+  If you're using IP-based quota, sign up for a free developer account:
+  ```bash
+  python -m memori sign-up your@email.com
+  ```
+  This increases your quota from 1,000 to 100,000 memories.
+</Step>
+
+<Step title="Request enterprise quota">
+  For production deployments requiring >100,000 memories, contact the Memori team:
+  - Email: [noc@memorilabs.ai](mailto:noc@memorilabs.ai)
+  - Discord: [discord.gg/abD4eGym6v](https://discord.gg/abD4eGym6v)
+</Step>
+
+<Step title="Use BYODB for unlimited storage">
+  Deploy Memori BYODB (Bring Your Own Database) for unlimited memory storage:
+  
+  ```python
+  from memori import Memori
+  import psycopg2
+  
+  # Use your own PostgreSQL database
+  connection = psycopg2.connect(
+      host="your-db-host",
+      database="memori",
+      user="your-user",
+      password="your-password"
+  )
+  
+  mem = Memori().storage.register(connection)
+  # No quota limits with BYODB!
+  ```
+  
+  See [BYODB Documentation](/byodb/quick-start) for details.
+</Step>
+
+</Steps>
+
+## Quota Best Practices
+
+### Do's
+
+✅ **Use specific entity and process IDs** - Better organization, easier monitoring
+
+✅ **Implement session management** - Group related interactions efficiently
+
+✅ **Monitor quota regularly** - Set up automated alerts at 80-90% usage
+
+✅ **Test with IP-based quota** - Validate before committing to production
+
+✅ **Consider BYODB for production** - Unlimited storage, full control
+
+### Don'ts
+
+❌ **Don't use generic IDs** - Avoid `entity_id="user"` or `process_id="agent"`
+
+❌ **Don't ignore quota warnings** - Plan ahead before hitting limits
+
+❌ **Don't create unnecessary sessions** - Each session consumes quota
+
+❌ **Don't forget to claim CockroachDB clusters** - 7-day expiration for unclaimed clusters
+
+## Troubleshooting Quota Issues
+
+### Quota Not Updating
+
+<Accordion title="Quota appears frozen or incorrect">
+
+**Problem:** The quota command shows outdated numbers.
+
+**Solutions:**
+1. Quota updates may have a brief delay (typically less than 1 minute)
+2. Check the dashboard for real-time data: [app.memorilabs.ai](https://app.memorilabs.ai)
+3. Verify you're checking the correct account:
+   ```bash
+   echo $MEMORI_API_KEY
+   python -m memori quota
+   ```
+
+</Accordion>
+
+### Unexpected High Usage
+
+<Accordion title="Quota usage is higher than expected">
+
+**Problem:** Using more memories than anticipated.
+
+**Investigation:**
+1. Check the dashboard to see memory distribution by entity/process
+2. Look for generic IDs that might be capturing too much
+3. Review session management - are you creating too many sessions?
+4. Verify attribution is set correctly:
+   ```python
+   # Log your attributions
+   print(f"Entity: {mem.config.entity_id}")
+   print(f"Process: {mem.config.process_id}")
+   print(f"Session: {mem.config.session_id}")
+   ```
+
+</Accordion>
+
+### API Key Not Increasing Quota
+
+<Accordion title="Still seeing IP-based quota limits after setting API key">
+
+**Problem:** API key doesn't seem to increase quota.
+
+**Solutions:**
+1. Verify API key is set correctly:
+   ```bash
+   echo $MEMORI_API_KEY
+   ```
+2. Ensure API key has no extra whitespace:
+   ```bash
+   export MEMORI_API_KEY=$(echo $MEMORI_API_KEY | tr -d '[:space:]')
+   ```
+3. Check for typos in the environment variable name
+4. Restart your application after setting the key
+5. Verify API key is valid:
+   ```bash
+   python -m memori quota
+   ```
+
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Usage" icon="terminal" href="/advanced/cli-usage">
+    Learn all CLI commands for quota management
+  </Card>
+  <Card title="Performance Tuning" icon="gauge-high" href="/advanced/performance-tuning">
+    Optimize memory recall and quota efficiency
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://app.memorilabs.ai">
+    Monitor your quota in real-time
+  </Card>
+  <Card title="BYODB Setup" icon="database" href="/byodb/quick-start">
+    Deploy with unlimited storage
+  </Card>
+</CardGroup>

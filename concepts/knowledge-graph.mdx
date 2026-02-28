@@ -1,0 +1,325 @@
+---
+title: Knowledge Graph
+description: How Memori automatically builds a knowledge graph from your AI conversations using semantic triples, entity relationships, and deduplication.
+---
+
+# Knowledge Graph
+
+Memori automatically builds a knowledge graph from your AI conversations. Each time Advanced Augmentation processes a conversation, it extracts structured relationships — semantic triples — and connects them into a graph. This powers richer recall and gives your AI deeper understanding of each user.
+
+## How It Works
+
+1. **Conversation captured** — Your user talks to your AI through the Memori-wrapped LLM client
+2. **Augmentation processes** — Memori analyzes the conversation in the background
+3. **NER extraction** — Named-entity recognition identifies key entities and relationships
+4. **Triple creation** — Relationships are expressed as subject-predicate-object triples
+5. **Graph storage** — Triples are stored and deduplicated in the knowledge graph
+6. **Recall ready** — The graph is available for semantic search on subsequent LLM calls
+
+![Memori Knowledge Graph](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/entities-knowledge-graph.webp)
+
+## Semantic Triples
+
+Every fact in the knowledge graph is a semantic triple — a three-part statement: **[Subject]** **[Predicate]** **[Object]**.
+
+- "Alice" "prefers" "dark mode"
+- "PostgreSQL" "is" "a relational database"
+- "The project" "uses" "FastAPI"
+
+### Example Extraction
+
+From _"My favorite database is PostgreSQL and I use it with FastAPI for our REST APIs. I've been using Python for about 8 years"_:
+
+| Subject | Predicate         | Object               |
+| ------- | ----------------- | -------------------- |
+| user    | favorite_database | PostgreSQL           |
+| user    | uses              | FastAPI              |
+| user    | uses_for          | REST APIs            |
+| user    | uses_with         | PostgreSQL + FastAPI |
+| user    | experience_years  | Python (8 years)     |
+
+Over time, as more conversations happen, the graph grows richer. Memori connects new facts to existing ones, building a comprehensive picture of each entity.
+
+## Triple Deduplication
+
+Memori automatically deduplicates triples to avoid storing redundant information:
+
+**First mention**:
+```python
+# User says: "I use PostgreSQL"
+# Stored: (user, uses, PostgreSQL) with mention_count=1
+```
+
+**Second mention**:
+```python
+# User says: "I prefer PostgreSQL for databases"
+# Updated: (user, uses, PostgreSQL) with mention_count=2, updated timestamp
+```
+
+Frequently mentioned facts get higher mention counts, which can be used for ranking or filtering.
+
+**Source**: Triple deduplication logic in `memori/memory/augmentation/augmentations/memori/_augmentation.py:246-251`
+
+## Storage Structure
+
+### Normalized Tables
+
+Triples are stored in a normalized schema to minimize redundancy:
+
+| Table                    | Purpose                                              |
+| ------------------------ | ---------------------------------------------------- |
+| `memori_subject`         | Stores unique subjects                               |
+| `memori_predicate`       | Stores unique predicates                             |
+| `memori_object`          | Stores unique objects                                |
+| `memori_knowledge_graph` | Links subjects, predicates, and objects into triples |
+| `memori_entity_fact`     | Stores facts with vector embeddings for recall       |
+
+### Knowledge Graph Table Schema
+
+```sql
+CREATE TABLE memori_knowledge_graph (
+    id INTEGER PRIMARY KEY,
+    entity_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    predicate_id INTEGER NOT NULL,
+    object_id INTEGER NOT NULL,
+    mention_count INTEGER DEFAULT 1,
+    first_mentioned_at TIMESTAMP,
+    last_mentioned_at TIMESTAMP,
+    FOREIGN KEY (entity_id) REFERENCES memori_entity(id),
+    FOREIGN KEY (subject_id) REFERENCES memori_subject(id),
+    FOREIGN KEY (predicate_id) REFERENCES memori_predicate(id),
+    FOREIGN KEY (object_id) REFERENCES memori_object(id)
+);
+```
+
+## Visualizing the Graph
+
+The Memori Playground at [app.memorilabs.ai](https://app.memorilabs.ai) includes a **Memory Graph Viewer** that shows:
+
+| Element            | What it shows                                  |
+| ------------------ | ---------------------------------------------- |
+| **Nodes**          | Subjects and objects from semantic triples     |
+| **Edges**          | Predicates (relationships) between nodes       |
+| **Mention counts** | How often a fact was discussed across sessions |
+| **Timestamps**     | When facts were first and last seen            |
+
+## Scope
+
+The knowledge graph follows the same scoping rules as other memory types:
+
+| Aspect         | Scope                                                           |
+| -------------- | --------------------------------------------------------------- |
+| **Triples**    | Per entity — shared across all processes                        |
+| **Visibility** | All processes for an entity can see and use the graph           |
+| **Growth**     | Conversations from any process contribute to the entity's graph |
+
+If Alice tells your support bot about PostgreSQL, your code assistant also knows she uses PostgreSQL.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+
+# Support bot conversation
+mem.attribution(entity_id="user_alice", process_id="support_bot")
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "I use PostgreSQL"}]
+)
+
+# Code assistant can access the same knowledge graph
+mem.attribution(entity_id="user_alice", process_id="code_assistant")
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What database do I use?"}]
+)
+# AI knows: PostgreSQL (from support bot conversation)
+```
+
+## Querying the Graph
+
+### Via Recall API
+
+The knowledge graph is automatically used during recall. When you call `mem.recall()` or make an LLM call through a wrapped client, Memori searches across both extracted facts and the knowledge graph to find the most relevant context.
+
+```python
+from memori import Memori
+
+mem = Memori()
+mem.attribution(entity_id="user_alice", process_id="my_agent")
+
+facts = mem.recall("database preferences", limit=5)
+
+for fact in facts:
+    print(f"Fact: {fact.content}")
+    print(f"Similarity: {fact.similarity:.4f}")
+```
+
+### Via Direct SQL (BYODB Only)
+
+If you're using BYODB, you can query the knowledge graph directly:
+
+<Accordion title="View All Triples">
+  ```sql
+  SELECT
+      s.name AS subject,
+      p.name AS predicate,
+      o.name AS object
+  FROM memori_knowledge_graph kg
+  JOIN memori_subject s ON kg.subject_id = s.id
+  JOIN memori_predicate p ON kg.predicate_id = p.id
+  JOIN memori_object o ON kg.object_id = o.id;
+  ```
+</Accordion>
+
+<Accordion title="Triples for an Entity">
+  ```sql
+  SELECT
+      s.name AS subject,
+      p.name AS predicate,
+      o.name AS object,
+      kg.mention_count,
+      kg.last_mentioned_at
+  FROM memori_knowledge_graph kg
+  JOIN memori_subject s ON kg.subject_id = s.id
+  JOIN memori_predicate p ON kg.predicate_id = p.id
+  JOIN memori_object o ON kg.object_id = o.id
+  JOIN memori_entity e ON kg.entity_id = e.id
+  WHERE e.external_id = 'user_alice'
+  ORDER BY kg.mention_count DESC;
+  ```
+</Accordion>
+
+<Accordion title="Most Mentioned Relationships">
+  ```sql
+  SELECT
+      s.name AS subject,
+      p.name AS predicate,
+      o.name AS object,
+      kg.mention_count
+  FROM memori_knowledge_graph kg
+  JOIN memori_subject s ON kg.subject_id = s.id
+  JOIN memori_predicate p ON kg.predicate_id = p.id
+  JOIN memori_object o ON kg.object_id = o.id
+  ORDER BY kg.mention_count DESC
+  LIMIT 10;
+  ```
+</Accordion>
+
+## Triple-to-Fact Conversion
+
+Memori automatically converts semantic triples into natural language facts for embedding and recall:
+
+```python
+# Triple stored:
+# (subject="user", predicate="uses", object="PostgreSQL")
+
+# Converted to fact:
+# "user uses PostgreSQL"
+
+# Embedded and stored in memori_entity_fact for semantic search
+```
+
+**Source**: Triple-to-fact conversion in `_augmentation.py:188-192, 221-236`
+
+### Hybrid Approach
+
+Memori uses both triples and facts for maximum flexibility:
+
+1. **Triples** provide structured, queryable relationships
+2. **Facts** enable semantic search via embeddings
+3. **Both** are generated from the same extraction process
+
+This hybrid approach gives you the best of both worlds:
+- Query precision (triples)
+- Semantic understanding (facts with embeddings)
+
+## Integration with Recall
+
+The knowledge graph enhances recall by providing additional context:
+
+**Without knowledge graph**:
+- Query: "What programming languages do I know?"
+- Recall: Direct fact matches only
+
+**With knowledge graph**:
+- Query: "What programming languages do I know?"
+- Recall: Facts + related triples (experience_years, uses_with, projects)
+- Result: Richer, more contextual answers
+
+## Building Relationships Over Time
+
+As conversations accumulate, the knowledge graph builds deeper relationships:
+
+**Conversation 1**:
+```
+User: "I use Python"
+Triples: (user, uses, Python)
+```
+
+**Conversation 2**:
+```
+User: "I've been using Python for 8 years"
+Triples: (user, uses, Python) — mention_count=2
+         (user, experience_years, Python (8 years))
+```
+
+**Conversation 3**:
+```
+User: "I use FastAPI with Python"
+Triples: (user, uses, Python) — mention_count=3
+         (user, uses, FastAPI)
+         (user, uses_with, Python + FastAPI)
+```
+
+The graph now encodes:
+- What the user uses (Python, FastAPI)
+- How long they've used it (8 years)
+- How they use it together (Python + FastAPI)
+
+## Knowledge Graph Schema (ERD)
+
+![Memori Schema ERD](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/erd.png)
+
+<Info>
+  The knowledge graph is built automatically — you don't need to extract triples manually. Just have conversations through Memori, and the graph grows organically.
+</Info>
+
+## Performance Considerations
+
+### Triple Deduplication
+
+Memori uses hash-based lookups to deduplicate triples efficiently:
+- O(1) lookup for existing triples
+- Batched inserts for new triples
+- Incremental mention count updates
+
+### Indexing
+
+The knowledge graph tables are indexed on:
+- `entity_id` (for per-entity queries)
+- `subject_id`, `predicate_id`, `object_id` (for relationship queries)
+- `mention_count` (for ranking)
+
+### Query Optimization
+
+When querying the graph directly, use indexes:
+
+```sql
+-- Good: Uses entity_id index
+SELECT * FROM memori_knowledge_graph WHERE entity_id = 123;
+
+-- Good: Uses composite indexes
+SELECT * FROM memori_knowledge_graph 
+WHERE subject_id = 1 AND predicate_id = 2;
+
+-- Avoid: Full table scan
+SELECT * FROM memori_knowledge_graph WHERE mention_count > 5;
+```
+
+<Warning>
+  Large knowledge graphs can impact query performance. Consider archiving old or low-mention-count triples if your graph grows very large (millions of triples).
+</Warning>

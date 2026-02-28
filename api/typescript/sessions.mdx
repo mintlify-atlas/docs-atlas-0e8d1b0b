@@ -1,0 +1,464 @@
+---
+title: 'Session Management'
+description: 'Manage conversation sessions and context'
+---
+
+## Overview
+
+Sessions in Memori represent individual conversation threads. They group related LLM interactions together, allowing you to:
+
+- Maintain conversation context across multiple API calls
+- Track conversation history
+- Start fresh conversations when needed
+- Resume previous conversations from your database
+
+By default, Memori automatically creates a new session UUID when you instantiate the SDK. You can manage this session manually using the methods described below.
+
+## SessionManager
+
+The `SessionManager` class handles the conversation session lifecycle and ensures consistent session IDs across requests.
+
+```typescript
+const memori = new Memori();
+const sessionManager = memori.session;
+```
+
+## Properties
+
+### session.id
+
+```typescript
+public get id(): string
+```
+
+The current active session UUID.
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori();
+
+// Get the current session ID
+const currentSessionId = memori.session.id;
+console.log(`Session ID: ${currentSessionId}`);
+// Output: Session ID: 550e8400-e29b-41d4-a716-446655440000
+```
+
+## Methods
+
+### resetSession()
+
+Resets the current session ID to a new random UUID. Call this when starting a completely new conversation thread.
+
+```typescript
+memori.resetSession();
+```
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori()
+  .attribution('user-123', 'my-agent')
+  .llm.register(client);
+
+// First conversation
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'My name is Alice' }],
+});
+
+// Start a new conversation (new session)
+memori.resetSession();
+
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+// This message will be in a separate session from the first
+```
+
+### setSession()
+
+Manually sets the session ID to a specific value. Use this to resume an existing conversation thread from your database.
+
+```typescript
+memori.setSession(id);
+```
+
+<ParamField path="id" type="string" required>
+  The UUID of the session to resume.
+</ParamField>
+
+**Returns:** `Memori` - Returns the Memori instance for method chaining
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori()
+  .attribution('user-123', 'my-agent')
+  .llm.register(client);
+
+// Save the session ID for later
+const sessionId = memori.session.id;
+await db.saveSession('user-123', sessionId);
+
+// ... Later, when the user returns ...
+
+const savedSessionId = await db.getSession('user-123');
+memori.setSession(savedSessionId);
+
+// Continue the previous conversation
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'What did we talk about earlier?' }],
+});
+```
+
+### session.reset()
+
+You can also call `reset()` directly on the `SessionManager` instance:
+
+```typescript
+memori.session.reset();
+```
+
+**Returns:** `SessionManager` - Returns the SessionManager instance for method chaining
+
+### session.set()
+
+You can also call `set()` directly on the `SessionManager` instance:
+
+```typescript
+memori.session.set('550e8400-e29b-41d4-a716-446655440000');
+```
+
+<ParamField path="id" type="string" required>
+  The UUID to set as the current session ID.
+</ParamField>
+
+**Returns:** `SessionManager` - Returns the SessionManager instance for method chaining
+
+## Usage Patterns
+
+### Single Conversation
+
+For simple applications with a single ongoing conversation:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori()
+  .attribution('user-123', 'personal-assistant')
+  .llm.register(client);
+
+// No session management needed - Memori handles it automatically
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Remember my birthday is May 15th' }],
+});
+
+await client.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'When is my birthday?' }],
+});
+```
+
+### Multi-Conversation Application
+
+For applications that manage multiple simultaneous conversations:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+interface Conversation {
+  userId: string;
+  sessionId: string;
+  agentType: string;
+}
+
+class ConversationManager {
+  private conversations = new Map<string, Conversation>();
+
+  async startConversation(userId: string, agentType: string): Promise<string> {
+    memori.attribution(userId, agentType).resetSession();
+    
+    const sessionId = memori.session.id;
+    const conversationId = `${userId}-${Date.now()}`;
+    
+    this.conversations.set(conversationId, {
+      userId,
+      sessionId,
+      agentType,
+    });
+    
+    return conversationId;
+  }
+
+  async continueConversation(conversationId: string, message: string) {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) throw new Error('Conversation not found');
+
+    memori
+      .attribution(conversation.userId, conversation.agentType)
+      .setSession(conversation.sessionId);
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: message }],
+    });
+
+    return response.choices[0].message.content;
+  }
+}
+
+// Usage
+const manager = new ConversationManager();
+
+const conv1 = await manager.startConversation('user-123', 'support-agent');
+const conv2 = await manager.startConversation('user-456', 'sales-agent');
+
+await manager.continueConversation(conv1, 'I need help with my account');
+await manager.continueConversation(conv2, 'Tell me about your pricing');
+```
+
+### Persistent Sessions with Database
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+import { db } from './database'; // Your database module
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+
+interface UserSession {
+  userId: string;
+  sessionId: string;
+  lastActive: Date;
+}
+
+class SessionService {
+  async getOrCreateSession(userId: string, agentType: string): Promise<string> {
+    // Try to load existing session from database
+    const existing = await db.sessions.findOne({ 
+      userId, 
+      agentType,
+      // Only resume sessions from the last 24 hours
+      lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    });
+
+    if (existing) {
+      // Resume existing session
+      memori
+        .attribution(userId, agentType)
+        .setSession(existing.sessionId);
+      
+      // Update last active time
+      await db.sessions.updateOne(
+        { _id: existing._id },
+        { $set: { lastActive: new Date() } }
+      );
+      
+      return existing.sessionId;
+    } else {
+      // Create new session
+      memori
+        .attribution(userId, agentType)
+        .resetSession();
+      
+      const sessionId = memori.session.id;
+      
+      await db.sessions.insertOne({
+        userId,
+        agentType,
+        sessionId,
+        lastActive: new Date(),
+      });
+      
+      return sessionId;
+    }
+  }
+
+  async endSession(userId: string, agentType: string): Promise<void> {
+    await db.sessions.deleteOne({ userId, agentType });
+  }
+}
+
+// Usage
+const sessionService = new SessionService();
+
+async function chat(userId: string, message: string) {
+  await sessionService.getOrCreateSession(userId, 'my-assistant');
+  
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+  
+  return response.choices[0].message.content;
+}
+```
+
+### Explicit Session Reset
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori()
+  .attribution('user-123', 'my-agent')
+  .llm.register(client);
+
+async function handleUserCommand(command: string, message: string) {
+  if (command === '/reset') {
+    memori.resetSession();
+    return 'Started a new conversation!';
+  }
+  
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+  
+  return response.choices[0].message.content;
+}
+
+// User can explicitly reset their conversation
+await handleUserCommand('', 'My favorite color is blue');
+await handleUserCommand('/reset', '');
+await handleUserCommand('', 'What is my favorite color?');
+// AI won't recall the blue color from the previous session
+```
+
+## Session Lifecycle
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+
+const memori = new Memori();
+
+// 1. Initial session (automatically created)
+const initialSessionId = memori.session.id;
+console.log(`Initial: ${initialSessionId}`);
+
+// 2. Reset to new session
+memori.resetSession();
+const newSessionId = memori.session.id;
+console.log(`After reset: ${newSessionId}`);
+console.log(`Different? ${initialSessionId !== newSessionId}`); // true
+
+// 3. Set to specific session
+memori.setSession('550e8400-e29b-41d4-a716-446655440000');
+const specificSessionId = memori.session.id;
+console.log(`After set: ${specificSessionId}`);
+// Output: After set: 550e8400-e29b-41d4-a716-446655440000
+```
+
+## Best Practices
+
+<Tip>
+  **When to reset sessions:**
+  - User explicitly starts a "new conversation"
+  - Switching between different topics or tasks
+  - After a significant time gap (e.g., 24 hours)
+  - When context from previous conversation is no longer relevant
+</Tip>
+
+<Tip>
+  **When to persist sessions:**
+  - Multi-turn conversations that span multiple requests
+  - User might return to continue the conversation later
+  - You want to maintain conversation history
+</Tip>
+
+<Warning>
+  Session IDs must be valid UUIDs. If you're generating them yourself, ensure they follow the UUID v4 format.
+</Warning>
+
+## Session Storage Example
+
+Here's a complete example using Redis for session storage:
+
+```typescript
+import { Memori } from '@memorilabs/memori';
+import { OpenAI } from 'openai';
+import Redis from 'ioredis';
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const memori = new Memori().llm.register(client);
+const redis = new Redis();
+
+const SESSION_TTL = 60 * 60 * 24; // 24 hours
+
+class RedisSessionStore {
+  private getKey(userId: string, agentType: string): string {
+    return `memori:session:${userId}:${agentType}`;
+  }
+
+  async get(userId: string, agentType: string): Promise<string | null> {
+    const key = this.getKey(userId, agentType);
+    return await redis.get(key);
+  }
+
+  async set(userId: string, agentType: string, sessionId: string): Promise<void> {
+    const key = this.getKey(userId, agentType);
+    await redis.setex(key, SESSION_TTL, sessionId);
+  }
+
+  async delete(userId: string, agentType: string): Promise<void> {
+    const key = this.getKey(userId, agentType);
+    await redis.del(key);
+  }
+}
+
+const sessionStore = new RedisSessionStore();
+
+async function chat(userId: string, agentType: string, message: string) {
+  // Try to load existing session
+  const existingSessionId = await sessionStore.get(userId, agentType);
+  
+  if (existingSessionId) {
+    memori
+      .attribution(userId, agentType)
+      .setSession(existingSessionId);
+  } else {
+    memori
+      .attribution(userId, agentType)
+      .resetSession();
+    
+    // Save new session
+    await sessionStore.set(userId, agentType, memori.session.id);
+  }
+  
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+  
+  return response.choices[0].message.content;
+}
+
+async function resetChat(userId: string, agentType: string) {
+  await sessionStore.delete(userId, agentType);
+  memori.attribution(userId, agentType).resetSession();
+}
+```
+
+## Related Documentation
+
+- [Memori Class](/api/typescript/memori) - Main SDK entry point
+- [Attribution](/api/typescript/attribution) - Configure attribution context
+- [Memory Recall](/api/typescript/recall) - Retrieving memories

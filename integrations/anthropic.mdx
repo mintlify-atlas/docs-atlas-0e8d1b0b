@@ -1,0 +1,250 @@
+---
+title: Anthropic Integration
+description: Add persistent memory to Anthropic Claude models with Memori - supports sync, async, and streaming.
+---
+
+# Anthropic Integration
+
+Memori integrates with all Anthropic Claude models, automatically capturing conversations through the Messages API to build persistent memory for your AI applications.
+
+## Installation
+
+```bash
+pip install memori anthropic
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+from anthropic import Anthropic
+from memori import Memori
+
+client = Anthropic()
+
+# Register the Anthropic client with Memori
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="claude_assistant")
+
+response = client.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello! My name is Alice."}]
+)
+print(response.content[0].text)
+```
+
+```python {{ title: 'Async' }}
+import asyncio
+from anthropic import AsyncAnthropic
+from memori import Memori
+
+client = AsyncAnthropic()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="claude_assistant")
+
+async def main():
+    response = await client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": "Hello! My name is Alice."}]
+    )
+    print(response.content[0].text)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+from anthropic import Anthropic
+from memori import Memori
+
+client = Anthropic()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="claude_assistant")
+
+with client.messages.stream(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Tell me a story"}]
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="")
+```
+
+</CodeGroup>
+
+## System Prompts
+
+Anthropic uses a dedicated `system` parameter. Memori captures both system instructions and message content.
+
+```python
+from anthropic import Anthropic
+from memori import Memori
+
+client = Anthropic()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="dev_001", process_id="coding_assistant")
+
+response = client.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=2048,
+    system="You are an expert Python developer. Provide concise, production-ready code.",
+    messages=[
+        {"role": "user", "content": "Write a function to validate email addresses"}
+    ]
+)
+print(response.content[0].text)
+```
+
+## Multi-Turn Conversations
+
+Memori tracks conversation history across multiple API calls:
+
+```python
+from anthropic import Anthropic
+from memori import Memori
+
+client = Anthropic()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_789", process_id="support")
+
+messages = [
+    {"role": "user", "content": "I'm having trouble with my account password."}
+]
+
+# First turn
+response = client.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=1024,
+    messages=messages
+)
+messages.append({
+    "role": "assistant",
+    "content": response.content[0].text
+})
+
+# Second turn - memory is maintained
+messages.append({
+    "role": "user",
+    "content": "Yes, I'd like to reset it."
+})
+response = client.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=1024,
+    messages=messages
+)
+print(response.content[0].text)
+```
+
+## Tool Use
+
+Memori captures Claude's tool use (function calling) automatically:
+
+```python
+from anthropic import Anthropic
+from memori import Memori
+import json
+
+client = Anthropic()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="tools_demo")
+
+tools = [
+    {
+        "name": "get_weather",
+        "description": "Get the current weather in a given location",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The city and state, e.g. San Francisco, CA"
+                }
+            },
+            "required": ["location"]
+        }
+    }
+]
+
+response = client.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": "What's the weather in Paris?"}]
+)
+
+for content in response.content:
+    if content.type == "tool_use":
+        print(f"Tool: {content.name}")
+        print(f"Input: {json.dumps(content.input)}")
+```
+
+## Beta Features
+
+Memori supports Claude's beta features including prompt caching and extended thinking:
+
+```python
+from anthropic import Anthropic
+from memori import Memori
+
+client = Anthropic()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="beta_features")
+
+# Using beta features
+response = client.beta.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=2048,
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+print(response.content[0].text)
+```
+
+## Supported Features
+
+| Feature              | Support | Method                       |
+| -------------------- | ------- | ---------------------------- |
+| **Sync Client**      | ✓       | `Anthropic()`                |
+| **Async Client**     | ✓       | `AsyncAnthropic()`           |
+| **Streaming**        | ✓       | `client.messages.stream()`   |
+| **System Prompts**   | ✓       | `system` parameter           |
+| **Tool Use**         | ✓       | `tools` parameter            |
+| **Vision**           | ✓       | Multi-modal content          |
+| **Prompt Caching**   | ✓       | Beta features                |
+| **Beta API**         | ✓       | `client.beta.messages`       |
+
+## How It Works
+
+When you register an Anthropic client with Memori:
+
+1. Memori wraps `client.messages.create()` and `client.beta.messages.create()`
+2. All message requests and responses are captured
+3. Conversations are stored in your Memori memory store
+4. A knowledge graph is built from conversation patterns
+5. The original API behavior is preserved
+
+<Note>
+The `max_tokens` parameter is required by Anthropic's API. Memori captures this along with all other request parameters.
+</Note>
+
+## Model Support
+
+Memori works with all Claude models:
+
+- **Claude Sonnet 4** (claude-sonnet-4-5-20250929)
+- **Claude Sonnet 3.5** (claude-3-5-sonnet-20241022)
+- **Claude Haiku** (claude-3-5-haiku-20241022)
+- **Claude Opus** (claude-3-opus-20240229)
+
+## Next Steps
+
+- Learn about [Memory Augmentation](/concepts/advanced-augmentation)
+- Explore [Knowledge Graphs](/concepts/knowledge-graph)
+- Compare with [OpenAI Integration](/integrations/openai)

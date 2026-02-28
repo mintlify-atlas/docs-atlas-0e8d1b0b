@@ -1,0 +1,220 @@
+---
+title: OpenAI Integration
+description: Add persistent memory to OpenAI GPT models with Memori - supports sync, async, streaming, and the Responses API.
+---
+
+# OpenAI Integration
+
+Memori seamlessly integrates with OpenAI's Chat Completions and Responses APIs, automatically capturing conversations to build a persistent memory layer for your AI applications.
+
+## Installation
+
+```bash
+pip install memori openai
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+
+# Register the OpenAI client with Memori
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="chat_assistant")
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello! My name is Alice."}]
+)
+print(response.choices[0].message.content)
+```
+
+```python {{ title: 'Async' }}
+import asyncio
+from memori import Memori
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="chat_assistant")
+
+async def main():
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello! My name is Alice."}]
+    )
+    print(response.choices[0].message.content)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="chat_assistant")
+
+stream = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Tell me a story"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")
+```
+
+</CodeGroup>
+
+## Responses API
+
+The new OpenAI Responses API simplifies agent interactions. Memori captures both input and output automatically.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="support_agent")
+
+response = client.responses.create(
+    model="gpt-4o-mini",
+    input="I need help with my order",
+    instructions="You are a helpful customer support agent."
+)
+print(response.output_text)
+```
+
+## Multi-Turn Conversations
+
+Memori automatically tracks conversation history across multiple turns, enabling contextual memory.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_456", process_id="assistant")
+
+messages = [
+    {"role": "user", "content": "My name is Alice and I love pizza."}
+]
+
+# First interaction
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=messages
+)
+messages.append({
+    "role": "assistant",
+    "content": response.choices[0].message.content
+})
+
+# Second interaction - Memori maintains memory context
+messages.append({
+    "role": "user",
+    "content": "What's my name and favorite food?"
+})
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=messages
+)
+print(response.choices[0].message.content)
+# Output: Your name is Alice and your favorite food is pizza.
+```
+
+## Structured Outputs with Parsing
+
+Memori supports OpenAI's structured output parsing:
+
+```python
+from memori import Memori
+from openai import OpenAI
+from pydantic import BaseModel
+
+class CalendarEvent(BaseModel):
+    name: str
+    date: str
+    participants: list[str]
+
+client = OpenAI()
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="calendar")
+
+completion = client.beta.chat.completions.parse(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "user", "content": "Schedule a team meeting on Friday with Alice, Bob, and Charlie"}
+    ],
+    response_format=CalendarEvent,
+)
+
+event = completion.choices[0].message.parsed
+print(f"Event: {event.name} on {event.date}")
+```
+
+## Supported Features
+
+| Feature               | Support | Method                             |
+| --------------------- | ------- | ---------------------------------- |
+| **Sync Client**       | ✓       | `OpenAI()`                         |
+| **Async Client**      | ✓       | `AsyncOpenAI()`                    |
+| **Streaming**         | ✓       | `stream=True`                      |
+| **Responses API**     | ✓       | `client.responses.create()`        |
+| **Function Calling**  | ✓       | Automatic                          |
+| **Structured Output** | ✓       | `beta.chat.completions.parse()`    |
+| **Vision**            | ✓       | Multi-modal message content        |
+| **JSON Mode**         | ✓       | `response_format={"type": "json"}` |
+
+## How It Works
+
+When you call `mem = Memori().llm.register(client)`, Memori:
+
+1. Wraps the OpenAI client's completion methods
+2. Captures all requests (messages, model, parameters)
+3. Captures all responses (completions, tool calls, etc.)
+4. Stores conversations in your Memori memory store
+5. Builds a knowledge graph from conversation patterns
+
+The original OpenAI API behavior remains unchanged - Memori operates transparently.
+
+## Configuration
+
+<Note>
+Memori automatically detects platform-specific OpenAI implementations (Nebius, DeepSeek, NVIDIA NIM) based on the `base_url` parameter.
+</Note>
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+# Custom OpenAI endpoint (e.g., Azure OpenAI)
+client = OpenAI(
+    base_url="https://your-resource.openai.azure.com/",
+    api_key="your-api-key"
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="azure_chat")
+```
+
+## Next Steps
+
+- Learn about [Memory Retrieval](/concepts/how-memory-works)
+- Explore [Multi-User Support](/concepts/multi-user-support)
+- Integrate with [LangChain](/integrations/langchain)

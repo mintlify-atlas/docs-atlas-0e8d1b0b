@@ -1,0 +1,311 @@
+---
+title: Advanced Augmentation
+description: How Memori's Advanced Augmentation engine extracts structured facts, preferences, and knowledge from your AI conversations with AI-powered analysis.
+---
+
+# Advanced Augmentation
+
+Advanced Augmentation is the AI engine inside Memori that turns raw conversations into structured, searchable memories. It runs asynchronously in the background to minimize impact on your response path.
+
+## What It Does
+
+When your application has a conversation through a Memori-wrapped LLM client, the augmentation engine:
+
+1. Reads the full conversation (user messages and AI responses)
+2. Identifies facts, preferences, skills, and attributes
+3. Extracts semantic triples (subject-predicate-object relationships)
+4. Generates vector embeddings for semantic search
+5. Stores everything in your memory backend
+
+No extra code required — just initialize Memori and set attribution.
+
+## How It Works
+
+The augmentation flow is fully asynchronous and designed to avoid blocking your main request path.
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="my_agent")
+
+# This returns immediately — no augmentation delay
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "user", "content": "I love hiking in the mountains."}
+    ]
+)
+print(response.choices[0].message.content)
+
+# Only needed in short-lived scripts
+mem.augmentation.wait()
+```
+
+### Augmentation Pipeline
+
+1. **Conversation capture** — Your app makes an LLM call through the wrapped client
+2. **Immediate response** — Memori returns the LLM response without delay
+3. **Background queueing** — The conversation is queued for asynchronous processing
+4. **Memory extraction** — The augmentation engine analyzes the conversation
+5. **Batched writes** — Extracted memories are written to storage in batches
+
+## Implementation Details
+
+Advanced Augmentation uses a sophisticated async architecture for high performance:
+
+### Worker Pool
+
+- **Max workers**: 50 concurrent augmentation tasks (configurable via `manager.max_workers`)
+- **Semaphore-based concurrency control** to prevent resource exhaustion
+- **Event loop management** with dedicated thread for async operations
+
+### Database Writer
+
+- **Batch size**: 100 write operations (configurable via `manager.db_writer_batch_size`)
+- **Batch timeout**: 0.1 seconds (configurable via `manager.db_writer_batch_timeout`)
+- **Queue size**: 1000 pending writes (configurable via `manager.db_writer_queue_size`)
+- **Automatic flushing** when batch is full or timeout expires
+
+**Source**: `memori/memory/augmentation/_manager.py:27-31`
+
+### Message Selection Strategy
+
+To optimize API usage and focus on relevant context, the augmentation engine intelligently selects messages:
+
+1. **With conversation summary**: Sends only the most recent user-assistant exchange
+2. **Without summary**: Sends all messages in the conversation
+
+This approach balances context richness with API efficiency.
+
+**Source**: `memori/memory/augmentation/augmentations/memori/_augmentation.py:53-84`
+
+## Extraction Types
+
+| Type                   | What it captures                                        | Scope                                |
+| ---------------------- | ------------------------------------------------------- | ------------------------------------ |
+| **Facts**              | Objective information with vector embeddings            | Per entity — shared across processes |
+| **Preferences**        | User choices, opinions, and tastes                      | Per entity                           |
+| **Skills & Knowledge** | Abilities and expertise levels                          | Per entity                           |
+| **Attributes**         | Process-level information about what your agent handles | Per process                          |
+
+### Entity-Level Memories
+
+**Facts** are stored in the `memori_entity_fact` table (or cloud equivalent) with:
+- Full text content
+- Vector embedding (384 dimensions for all-MiniLM-L6-v2)
+- Creation timestamp
+- Entity association
+
+**Semantic triples** form the knowledge graph:
+- Subject (e.g., "user")
+- Predicate (e.g., "uses")
+- Object (e.g., "PostgreSQL")
+- Mention count (increments on duplicate)
+- Last mentioned timestamp
+
+### Process-Level Memories
+
+**Attributes** are stored in the `memori_process_attribute` table with:
+- Attribute name
+- Attribute value
+- Process association
+
+These describe what the agent or process does, not what the user does.
+
+## Semantic Triples
+
+Advanced Augmentation uses named-entity recognition (NER) to extract semantic triples (subject, predicate, object). These form the building blocks of the [Knowledge Graph](/concepts/knowledge-graph).
+
+**Example** — from _"My favorite database is PostgreSQL and I use it with FastAPI"_:
+
+| Subject | Predicate         | Object               |
+| ------- | ----------------- | -------------------- |
+| user    | favorite_database | PostgreSQL           |
+| user    | uses              | FastAPI              |
+| user    | uses_with         | PostgreSQL + FastAPI |
+
+Memori automatically deduplicates triples — if the same fact is mentioned multiple times, it increments the mention count and updates the timestamp.
+
+### Triple Storage
+
+Triples are normalized and stored across multiple tables:
+
+1. **Subjects** — Unique subjects (e.g., "user", "Alice")
+2. **Predicates** — Unique predicates (e.g., "uses", "prefers")
+3. **Objects** — Unique objects (e.g., "PostgreSQL", "dark mode")
+4. **Knowledge Graph** — Links subjects, predicates, and objects with metadata
+
+**Source**: Knowledge graph creation in `_augmentation.py:246-251`
+
+## Embeddings
+
+Vector embeddings power semantic recall. Memori generates embeddings for:
+- Extracted facts
+- Facts derived from semantic triples
+
+**Embedding generation**:
+
+```python
+from memori.embeddings import embed_texts
+
+# Generate embeddings for a list of texts
+embeddings = await embed_texts(
+    ["User prefers dark mode", "User uses PostgreSQL"],
+    model="all-MiniLM-L6-v2",
+    async_=True
+)
+# Returns: list of 384-dimensional vectors
+```
+
+**Default model**: `all-MiniLM-L6-v2` (384 dimensions)
+**Configurable via**: `MEMORI_EMBEDDINGS_MODEL` environment variable
+
+**Source**: `memori/embeddings/_api.py` and embedding generation in `_augmentation.py:196-200, 227-232`
+
+## Context Recall
+
+When a query is sent to an LLM through a wrapped client, Memori automatically:
+
+1. Intercepts the outbound LLM call
+2. Embeds the user's query
+3. Uses semantic search to find entity facts matching the query
+4. Ranks facts by cosine similarity via FAISS
+5. Injects the most relevant facts into the system prompt
+6. Forwards the enriched request to the LLM provider
+
+**Search algorithm**:
+- FAISS `IndexFlatIP` (inner product after L2 normalization = cosine similarity)
+- Exact search (not approximate)
+- Filters by `recall_relevance_threshold` (default: 0.1)
+
+**Source**: 
+- Recall implementation: `memori/memory/recall.py:180-226`
+- FAISS integration: `memori/search/_faiss.py:81-122`
+
+## Waiting for Augmentation
+
+In short-lived scripts, call `mem.augmentation.wait()` to ensure processing completes before the program exits:
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="my_agent")
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "I use Python"}]
+)
+
+# Wait for augmentation to complete (with 30-second timeout)
+if mem.augmentation.wait(timeout=30):
+    print("Augmentation complete!")
+else:
+    print("Augmentation timed out")
+```
+
+**Wait behavior**:
+1. Waits for all pending futures to complete
+2. Waits for the database writer queue to drain
+3. Waits an additional 2x batch timeout for final processing
+4. Returns `True` if successful, `False` if timeout exceeded
+
+**Source**: `memori/memory/augmentation/_manager.py:168-210`
+
+<Info>
+  Long-running applications (web servers, chatbots) don't need to call `.wait()` — augmentation happens continuously in the background.
+</Info>
+
+## Error Handling
+
+Advanced Augmentation gracefully handles errors:
+
+### Quota Exceeded
+
+When quota is exceeded, augmentation is automatically disabled:
+
+```python
+from memori import QuotaExceededError
+
+try:
+    response = client.chat.completions.create(...)
+except QuotaExceededError as e:
+    print(f"Quota exceeded: {e}")
+    # Conversations still work, but augmentation is paused
+```
+
+### Augmentation Failures
+
+If an individual augmentation task fails:
+- Error is logged
+- Other augmentation tasks continue
+- Your LLM calls are not affected
+
+**Source**: Error handling in `_manager.py:97-110`
+
+## Configuration
+
+Customize augmentation behavior:
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+# Access augmentation manager after initialization
+mem.augmentation.max_workers = 100           # Increase parallelism
+mem.augmentation.db_writer_batch_size = 200  # Larger batches
+mem.augmentation.db_writer_batch_timeout = 0.5  # Wait longer before flush
+```
+
+<Warning>
+  Increasing `max_workers` and batch sizes can improve throughput but also increases memory usage. Monitor your application's resource consumption when tuning these parameters.
+</Warning>
+
+## Metadata Collection
+
+Advanced Augmentation collects metadata about your deployment for analytics and debugging:
+
+- **SDK version** — Python SDK version
+- **LLM provider** — OpenAI, Anthropic, Google, etc.
+- **LLM model** — gpt-4o-mini, claude-3-sonnet, etc.
+- **Framework** — LangChain, PydanticAI, etc.
+- **Platform** — FastAPI, Django, etc.
+- **Storage dialect** — PostgreSQL, SQLite, MongoDB, etc.
+
+This metadata is hashed and sent with augmentation requests to help improve the service.
+
+**Source**: Payload construction in `_augmentation.py:86-123`
+
+<Accordion title="View Augmentation Payload Structure">
+  ```json
+  {
+    "conversation": {
+      "messages": [
+        {"role": "user", "content": "..."},
+        {"role": "assistant", "content": "..."}
+      ],
+      "summary": "Previous conversation context"
+    },
+    "meta": {
+      "attribution": {
+        "entity": {"id": "hashed_entity_id"},
+        "process": {"id": "hashed_process_id"}
+      },
+      "sdk": {"lang": "python", "version": "1.0.0"},
+      "llm": {
+        "model": {
+          "provider": "openai",
+          "version": "gpt-4o-mini"
+        }
+      },
+      "storage": {"dialect": "postgresql"}
+    }
+  }
+  ```
+</Accordion>

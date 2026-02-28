@@ -1,0 +1,172 @@
+---
+title: Introduction
+description: The memory fabric for enterprise AI - Add persistent memory to your LLM applications
+---
+
+# Introduction to Memori
+
+Memori is the memory fabric for enterprise AI that plugs into the software and infrastructure you already use. It is LLM, datastore, and framework agnostic, seamlessly integrating into the architecture you've already designed.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get started in minutes with Memori Cloud or bring your own database
+  </Card>
+  <Card
+    title="Memori Cloud"
+    icon="cloud"
+    href="/cloud/overview"
+  >
+    Zero-config managed memory service. Start in minutes with no database setup.
+  </Card>
+  <Card
+    title="BYODB (Bring Your Own Database)"
+    icon="database"
+    href="/byodb/overview"
+  >
+    Full control with your own database. Works with PostgreSQL, MySQL, MongoDB, and more.
+  </Card>
+  <Card
+    title="API reference"
+    icon="code"
+    href="/api/python/memori"
+  >
+    Explore the complete SDK reference for Python and TypeScript
+  </Card>
+</CardGroup>
+
+## What is Memori?
+
+Memori enables your AI applications to remember and recall information across conversations. Instead of starting fresh with every interaction, your AI can build on past conversations, understand user preferences, and maintain context over time.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Zero-latency memory" icon="bolt">
+    Background processing ensures your LLM calls are never slowed down. Memories are persisted and recalled asynchronously.
+  </Card>
+  <Card title="Advanced augmentation" icon="brain">
+    Automatically extracts and structures facts, preferences, relationships, events, and more from conversations.
+  </Card>
+  <Card title="LLM agnostic" icon="arrows-rotate">
+    Native support for OpenAI, Anthropic, Gemini, Bedrock, and Grok. Works with any LLM provider.
+  </Card>
+  <Card title="Framework integration" icon="puzzle-piece">
+    Seamless integration with popular frameworks like LangChain and Agno.
+  </Card>
+  <Card title="Flexible storage" icon="server">
+    Use Memori Cloud for zero-config hosting or bring your own database (PostgreSQL, MongoDB, SQLite, and more).
+  </Card>
+  <Card title="Automatic recall" icon="sparkles">
+    Relevant memories are automatically injected into your prompts - no manual context management required.
+  </Card>
+</CardGroup>
+
+## How it works
+
+Memori operates at three distinct levels to provide comprehensive memory management:
+
+<Steps>
+  <Step title="Entity level">
+    Track information about individual users, customers, or any distinct person, place, or thing in your system.
+  </Step>
+  <Step title="Process level">
+    Maintain context for specific agents, workflows, or application processes.
+  </Step>
+  <Step title="Session level">
+    Group related interactions together, such as a conversation thread or multi-step agent execution.
+  </Step>
+</Steps>
+
+### Memory types
+
+Memori's Advanced Augmentation automatically extracts and organizes several types of information:
+
+- **Facts** - Objective information learned from conversations
+- **Preferences** - User likes, dislikes, and choices
+- **Attributes** - Characteristics of entities and processes
+- **Relationships** - Connections between different entities
+- **Events** - Important occurrences and milestones
+- **Skills** - Capabilities and competencies
+- **Rules** - Guidelines and constraints to follow
+- **People** - Information about individuals mentioned in conversations
+
+<Note>
+  Advanced Augmentation runs asynchronously in the background, ensuring zero latency impact on your LLM calls.
+</Note>
+
+## Supported platforms
+
+### LLM providers
+
+Memori works with all major LLM providers:
+
+- **OpenAI** (Chat Completions & Responses API)
+- **Anthropic** (Claude)
+- **Google Gemini**
+- **AWS Bedrock**
+- **Grok** (xAI)
+
+All providers support streamed, unstreamed, synchronous, and asynchronous modes.
+
+### Frameworks
+
+- **Agno** - Build AI agents with persistent memory
+- **LangChain** - Add memory to your LangChain applications
+
+### Cloud platforms
+
+- **Nebius AI Studio** - Integrated support for Nebius platform
+
+### Databases (BYODB)
+
+- **PostgreSQL** - Including Neon, DigitalOcean, and other PostgreSQL-compatible services
+- **CockroachDB** - Distributed SQL database
+- **MongoDB** - Document database
+- **SQLite** - Local file-based database
+- **OceanBase** - Distributed database
+- **Oracle** - Enterprise database
+- **MySQL** - Popular relational database
+
+## Installation
+
+<CodeGroup>
+
+```bash Python
+pip install memori
+```
+
+```bash TypeScript
+npm install @memorilabs/memori
+```
+
+</CodeGroup>
+
+<Tip>
+  Python requires version 3.10 or higher. TypeScript requires Node.js 18.0.0 or higher.
+</Tip>
+
+## Getting started
+
+Ready to add memory to your AI application? Check out the [Quickstart guide](/quickstart) to build your first memory-enabled application in minutes.
+
+For detailed documentation:
+
+- **Memori Cloud**: [Complete guide](/cloud/overview) for the managed solution
+- **BYODB**: [Setup instructions](/byodb/overview) for using your own database
+- **Examples**: Browse the [Memori Cookbook](https://github.com/MemoriLabs/memori-cookbook) for more examples
+
+## Support
+
+Need help getting started?
+
+- **Documentation**: [memorilabs.ai/docs](https://memorilabs.ai/docs)
+- **Discord**: Join our [community](https://discord.gg/abD4eGym6v)
+- **GitHub**: Report issues or contribute on [GitHub](https://github.com/MemoriLabs/Memori)
+
+## License
+
+Memori is open source under the Apache 2.0 license.

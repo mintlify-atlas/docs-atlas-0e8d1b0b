@@ -1,0 +1,289 @@
+---
+title: BYODB Installation
+description: Install Memori and set up your database for the Memori BYODB.
+---
+
+# Installation
+
+Get Memori installed and connected to your own database in a few steps.
+
+<Note>
+  Want a zero-setup option? Try Memori Cloud at [app.memorilabs.ai](https://app.memorilabs.ai).
+</Note>
+
+## Install Memori
+
+<CodeGroup>
+
+```bash pip
+pip install memori
+```
+
+```bash poetry
+poetry add memori
+```
+
+```bash uv
+uv add memori
+```
+
+</CodeGroup>
+
+## Install Your Database Driver
+
+Memori supports SQLite, PostgreSQL, MySQL, MariaDB, Oracle, MongoDB, CockroachDB, and OceanBase. Managed services like Neon, Supabase, and AWS RDS/Aurora work through their compatible PostgreSQL/MySQL engines.
+
+Install the driver for your preferred database:
+
+<CodeGroup>
+
+```bash SQLite (built-in)
+# No extra install needed!
+# SQLite support is included with Python.
+```
+
+```bash PostgreSQL
+pip install psycopg2-binary
+# Or for async: pip install asyncpg
+```
+
+```bash MySQL
+pip install pymysql
+# Or: pip install mysqlclient
+```
+
+```bash MariaDB
+pip install pymysql
+# Or: pip install mysqlclient
+```
+
+```bash Oracle
+pip install oracledb
+```
+
+```bash MongoDB
+pip install pymongo
+```
+
+```bash CockroachDB
+pip install psycopg2-binary
+```
+
+```bash OceanBase
+pip install pyobvector
+```
+
+</CodeGroup>
+
+<Note>
+  Neon, Supabase, and AWS RDS/Aurora use standard PostgreSQL drivers (`psycopg2-binary` or `psycopg`).
+</Note>
+
+## Connection Patterns
+
+Memori accepts a `conn` parameter — a callable that returns a new connection each time it is called.
+
+| Pattern    | What to pass to `conn`                          | Works With                                                            |
+| ---------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| SQLAlchemy | `sessionmaker`                                  | SQLite, PostgreSQL, MySQL, MariaDB, Oracle, CockroachDB, OceanBase    |
+| DB API 2.0 | Function that returns a PEP 249 connection      | SQLite and SQL drivers (`sqlite3`, `psycopg2`, `pymysql`, `oracledb`) |
+| Django ORM | Django connection callable                      | Django applications                                                   |
+| MongoDB    | Function that returns a MongoDB database object | MongoDB via `pymongo`                                                 |
+
+### SQLite (DB API 2.0)
+
+```python
+import sqlite3
+
+def get_connection():
+    return sqlite3.connect("memori.db")
+
+from memori import Memori
+mem = Memori(conn=get_connection)
+```
+
+### PostgreSQL (SQLAlchemy)
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+engine = create_engine(
+    "postgresql+psycopg2://user:password@localhost:5432/mydb"
+)
+SessionLocal = sessionmaker(bind=engine)
+
+from memori import Memori
+mem = Memori(conn=SessionLocal)
+```
+
+### PostgreSQL (DB API 2.0)
+
+```python
+import psycopg2
+from memori import Memori
+
+def get_connection():
+    return psycopg2.connect(
+        dbname="mydb",
+        user="user",
+        password="password",
+        host="localhost",
+        port=5432,
+    )
+
+mem = Memori(conn=get_connection)
+```
+
+### MySQL / MariaDB (SQLAlchemy)
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+engine = create_engine(
+    "mysql+pymysql://user:password@localhost:3306/mydb"
+)
+SessionLocal = sessionmaker(bind=engine)
+
+from memori import Memori
+mem = Memori(conn=SessionLocal)
+```
+
+### MongoDB
+
+```python
+from pymongo import MongoClient
+from memori import Memori
+
+client = MongoClient("mongodb://localhost:27017")
+
+def get_db():
+    return client["memori_db"]
+
+mem = Memori(conn=get_db)
+```
+
+## Create the Schema
+
+After setting up your connection, run `build()` once to create the Memori tables in your database. This only needs to be done the first time, or when you upgrade Memori.
+
+```python
+import sqlite3
+from memori import Memori
+
+def get_connection():
+    return sqlite3.connect("memori.db")
+
+mem = Memori(conn=get_connection)
+mem.config.storage.build()  # Creates all required tables
+```
+
+<Note>
+  The `build()` method creates tables like `memori_conversation_message`, `memori_entity_fact`, `memori_knowledge_graph`, and more.
+</Note>
+
+## Install Your LLM Provider
+
+Install the SDK for your preferred LLM provider:
+
+<CodeGroup>
+
+```bash OpenAI
+pip install openai
+```
+
+```bash Anthropic
+pip install anthropic
+```
+
+```bash Google Gemini
+pip install google-genai
+```
+
+```bash LangChain
+pip install langchain-openai
+```
+
+</CodeGroup>
+
+## Set Up Your LLM Provider Key
+
+You will need an API key for your LLM provider:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="your-openai-key"
+
+# Anthropic
+export ANTHROPIC_API_KEY="your-anthropic-key"
+
+# Google Gemini
+export GOOGLE_API_KEY="your-google-key"
+```
+
+## Set Up Your Memori API Key (Optional)
+
+A Memori API key unlocks higher augmentation quotas (5,000/month vs 100 without a key). You can sign up directly from the CLI:
+
+```bash
+python -m memori sign-up your-email@example.com
+```
+
+Then set the key as an environment variable:
+
+```bash
+export MEMORI_API_KEY="your-api-key-here"
+```
+
+Or add it to a `.env` file in your project root:
+
+```
+MEMORI_API_KEY=your-api-key-here
+```
+
+Check your current quota anytime:
+
+```bash
+python -m memori quota
+```
+
+## Pre-download the Embedding Model
+
+Memori uses a local embedding model for semantic search. On first run, it downloads the model automatically, which can take a moment. To pre-download it:
+
+```bash
+python -m memori setup
+```
+
+## Verify Installation
+
+Run the following command to confirm the package is installed:
+
+```bash
+pip show memori
+```
+
+You should see output showing the Memori package version and location.
+
+## What's Next?
+
+<Steps>
+  <Step title="Quick Start">
+    Build your first memory-enabled application with SQLite in under 3 minutes.
+    
+    [Go to Quick Start →](/byodb/quick-start)
+  </Step>
+  
+  <Step title="Choose Your Database">
+    Explore detailed setup guides for each supported database.
+    
+    [Go to Databases →](/byodb/databases)
+  </Step>
+  
+  <Step title="Choose Your LLM">
+    Explore integration guides for different LLM providers.
+    
+    View LLM integrations in the sidebar
+  </Step>
+</Steps>

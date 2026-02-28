@@ -1,0 +1,427 @@
+---
+title: "Recall"
+description: "Memory recall API for retrieving relevant facts"
+---
+
+## Overview
+
+The Recall API allows you to retrieve relevant memories based on semantic search. It uses embeddings to find facts that match your query, enabling context-aware AI applications.
+
+## recall()
+
+Retrieve relevant memories based on a query string.
+
+### Parameters
+
+<ParamField path="query" type="str" required>
+  The search query to find relevant memories. The query is embedded and compared against stored memory embeddings using semantic similarity.
+  
+  **Examples:**
+  - `"What is the user's favorite color?"`
+  - `"user preferences"`
+  - `"previous issues reported by this customer"`
+</ParamField>
+
+<ParamField path="limit" type="int | None" default="None">
+  Maximum number of facts to return. If not specified, uses `config.recall_facts_limit` (default: 5).
+  
+  **Range:** Typically 1-100
+</ParamField>
+
+### Returns
+
+<ResponseField name="return" type="list[FactSearchResult | Mapping[str, object] | str]">
+  List of relevant memory facts matching the query. The format depends on the storage backend:
+  
+  - **Local storage (PostgreSQL, etc.):** Returns `FactSearchResult` objects with fields like `fact`, `score`, `metadata`
+  - **Cloud storage:** Returns dictionaries or strings containing fact data
+  
+  Results are sorted by relevance (highest similarity first).
+</ResponseField>
+
+## Usage Examples
+
+### Basic Recall
+
+```python
+from memori import Memori
+
+mem = Memori()
+mem.attribution(entity_id="user-123")
+
+facts = mem.recall("What are my preferences?", limit=10)
+for fact in facts:
+    print(fact)
+```
+
+### Recall with OpenAI
+
+```python
+import os
+from openai import OpenAI
+from memori import Memori
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+engine = create_engine(os.getenv("DATABASE_CONNECTION_STRING"))
+Session = sessionmaker(bind=engine)
+
+mem = Memori(conn=Session).llm.register(client)
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.config.storage.build()
+
+# First conversation - create memories
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "My favorite color is blue and I live in Paris"
+    }]
+)
+
+# Manual recall to check what was stored
+facts = mem.recall("user's favorite color", limit=5)
+print(f"Found {len(facts)} relevant facts:")
+for i, fact in enumerate(facts, 1):
+    print(f"{i}. {fact}")
+
+# Later conversation - automatic recall happens via LLM integration
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "What's my favorite color?"
+    }]
+)
+print(response2.choices[0].message.content)  # "Your favorite color is blue"
+
+mem.augmentation.wait()
+```
+
+### Recall with Custom Limit
+
+```python
+mem = Memori()
+mem.attribution(entity_id="customer-456")
+
+# Get top 3 most relevant facts
+top_facts = mem.recall("customer issues", limit=3)
+
+# Get many facts for comprehensive context
+all_facts = mem.recall("customer history", limit=50)
+```
+
+### Cloud Storage Recall
+
+```python
+import os
+
+os.environ["MEMORI_API_KEY"] = "your-api-key"
+
+mem = Memori()  # Uses cloud storage
+mem.attribution(entity_id="user-789", process_id="my-app")
+
+facts = mem.recall("user preferences", limit=10)
+for fact in facts:
+    print(fact)
+```
+
+### Processing Recall Results
+
+```python
+from memori import Memori
+
+mem = Memori()
+mem.attribution(entity_id="user-123")
+
+facts = mem.recall("user preferences", limit=10)
+
+if not facts:
+    print("No relevant memories found")
+else:
+    print(f"Found {len(facts)} relevant memories:")
+    
+    for i, fact in enumerate(facts, 1):
+        # Cloud storage returns dicts or strings
+        if isinstance(fact, dict):
+            print(f"{i}. {fact.get('fact', fact)}")
+        elif isinstance(fact, str):
+            print(f"{i}. {fact}")
+        else:
+            # Local storage returns FactSearchResult objects
+            print(f"{i}. {fact}")
+```
+
+### Building Context for LLM
+
+```python
+from openai import OpenAI
+from memori import Memori
+
+client = OpenAI()
+mem = Memori()
+mem.attribution(entity_id="user-123")
+
+user_query = "What products have I shown interest in?"
+
+# Retrieve relevant memories
+facts = mem.recall(user_query, limit=5)
+
+# Build context from facts
+context = "\n".join([str(fact) for fact in facts])
+
+# Use context in LLM prompt
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {
+            "role": "system",
+            "content": f"Relevant context:\n{context}"
+        },
+        {
+            "role": "user",
+            "content": user_query
+        }
+    ]
+)
+
+print(response.choices[0].message.content)
+```
+
+### Customer Support Agent
+
+```python
+from memori import Memori
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+engine = create_engine("sqlite:///support.db")
+Session = sessionmaker(bind=engine)
+
+model = OpenAIChat(id="gpt-4o-mini")
+mem = Memori(conn=Session).llm.register(openai_chat=model)
+mem.config.storage.build()
+
+def handle_customer(customer_id: str, query: str):
+    mem.attribution(entity_id=customer_id, process_id="support")
+    
+    # Recall customer history
+    facts = mem.recall(
+        f"customer issues and preferences: {query}",
+        limit=10
+    )
+    
+    print(f"Recalled {len(facts)} relevant facts for customer {customer_id}")
+    
+    # Agent uses recalled context automatically
+    agent = Agent(
+        model=model,
+        instructions=[
+            "You are a helpful customer support agent.",
+            "Use customer history to provide personalized support."
+        ]
+    )
+    
+    response = agent.run(query)
+    return response.content
+
+# Usage
+response = handle_customer("customer-123", "I need help with my order")
+print(response)
+```
+
+## Configuration
+
+### Recall Limits
+
+```python
+mem = Memori()
+
+# Set default fact limit
+mem.config.recall_facts_limit = 10
+
+# Set embeddings search limit (affects search performance)
+mem.config.recall_embeddings_limit = 2000
+
+# Set relevance threshold (0.0 to 1.0)
+mem.config.recall_relevance_threshold = 0.1
+
+facts = mem.recall("query")  # Uses recall_facts_limit=10
+```
+
+### Environment Variables
+
+```bash
+# Set embeddings limit via environment
+export MEMORI_RECALL_EMBEDDINGS_LIMIT=5000
+```
+
+```python
+# Automatically picked up by Memori
+mem = Memori()
+print(mem.config.recall_embeddings_limit)  # 5000
+```
+
+### Embedding Model
+
+```python
+# Change the embedding model
+mem = Memori()
+mem.config.embeddings.model = "all-MiniLM-L6-v2"
+
+# Or via environment variable
+import os
+os.environ["MEMORI_EMBEDDINGS_MODEL"] = "all-MiniLM-L6-v2"
+mem = Memori()
+```
+
+## How Recall Works
+
+1. **Query Embedding**: Your query is converted to an embedding vector using the configured model
+2. **Similarity Search**: The embedding is compared against stored fact embeddings using cosine similarity
+3. **Filtering**: Results are filtered by entity_id (from attribution)
+4. **Ranking**: Facts are ranked by similarity score
+5. **Limit**: Top N facts are returned based on the limit parameter
+
+```python
+# Internally, recall does this:
+query = "user preferences"
+query_embedding = embed_texts(query, model="all-MiniLM-L6-v2")[0]
+facts = search_facts(
+    driver=storage.driver.entity_fact,
+    entity_id=entity_id,
+    query_embedding=query_embedding,
+    limit=5,
+    embeddings_limit=1000
+)
+```
+
+## Recall Class (Internal)
+
+The `Recall` class is used internally by `mem.recall()`. You typically don't instantiate it directly, but it's available if needed:
+
+```python
+from memori.memory.recall import Recall
+
+recall = Recall(mem.config)
+facts = recall.search_facts(
+    query="user preferences",
+    limit=10,
+    entity_id=None,  # Uses config.entity_id
+    cloud=False      # Uses config.cloud
+)
+```
+
+## Performance Considerations
+
+### 1. Limit Results
+
+Only fetch what you need:
+
+```python
+# Good: Focused recall
+facts = mem.recall("recent user activity", limit=5)
+
+# Avoid: Fetching too many facts
+facts = mem.recall("everything", limit=1000)
+```
+
+### 2. Embeddings Limit
+
+Adjust `recall_embeddings_limit` for performance vs. accuracy:
+
+```python
+# Fast search, might miss some relevant facts
+mem.config.recall_embeddings_limit = 500
+
+# Slower but more comprehensive
+mem.config.recall_embeddings_limit = 5000
+```
+
+### 3. Query Specificity
+
+Use specific queries for better results:
+
+```python
+# Good: Specific query
+facts = mem.recall("user's favorite programming language")
+
+# Less effective: Vague query
+facts = mem.recall("user info")
+```
+
+## Error Handling
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+try:
+    # Recall without attribution
+    facts = mem.recall("query")
+    # Returns empty list if entity_id not set
+    print(f"Found {len(facts)} facts")
+except Exception as e:
+    print(f"Recall error: {e}")
+```
+
+## Best Practices
+
+### 1. Set Attribution Before Recall
+
+```python
+mem = Memori()
+mem.attribution(entity_id="user-123")  # Required!
+facts = mem.recall("user preferences")
+```
+
+### 2. Use Appropriate Limits
+
+```python
+# For LLM context injection
+facts = mem.recall(query, limit=5)
+
+# For comprehensive analysis
+facts = mem.recall(query, limit=20)
+```
+
+### 3. Check for Empty Results
+
+```python
+facts = mem.recall("query")
+if not facts:
+    print("No relevant memories found")
+else:
+    # Process facts
+    pass
+```
+
+### 4. Combine with LLM Integration
+
+Let Memori handle recall automatically:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user-123")
+
+# Recall happens automatically during chat
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What's my favorite color?"}]
+)
+```
+
+## See Also
+
+- [Memori](/api/python/memori) - Core Memori class
+- [Attribution](/api/python/attribution) - Memory attribution methods
+- [Sessions](/api/python/sessions) - Session management
+- [Embeddings](/api/python/embeddings) - Embeddings API

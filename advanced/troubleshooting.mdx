@@ -1,0 +1,957 @@
+---
+title: Troubleshooting
+description: Common issues, error messages, and solutions for Memori
+---
+
+This guide helps you diagnose and resolve common issues when working with Memori. For additional support, visit our [Discord community](https://discord.gg/abD4eGym6v) or [GitHub Issues](https://github.com/MemoriLabs/Memori/issues).
+
+## Installation Issues
+
+### ModuleNotFoundError: No module named 'memori'
+
+<Accordion title="Python cannot find the Memori module">
+
+**Problem:** Import fails with `ModuleNotFoundError`.
+
+**Symptoms:**
+```python
+>>> from memori import Memori
+ModuleNotFoundError: No module named 'memori'
+```
+
+**Solutions:**
+
+<Steps>
+
+<Step title="Verify installation">
+  ```bash
+  pip list | grep memori
+  ```
+  If not listed, install it:
+  ```bash
+  pip install memori
+  ```
+</Step>
+
+<Step title="Check Python environment">
+  Ensure you're using the correct Python interpreter:
+  ```bash
+  which python
+  python --version
+  ```
+  
+  If using virtual environments:
+  ```bash
+  source venv/bin/activate  # Linux/Mac
+  venv\Scripts\activate     # Windows
+  pip install memori
+  ```
+</Step>
+
+<Step title="Reinstall if necessary">
+  ```bash
+  pip uninstall memori
+  pip install memori
+  ```
+</Step>
+
+</Steps>
+
+</Accordion>
+
+### Missing Dependencies for Database Drivers
+
+<Accordion title="ImportError: No module named 'psycopg2' or similar">
+
+**Problem:** Database driver not installed.
+
+**Symptoms:**
+```python
+ImportError: No module named 'psycopg2'
+ImportError: No module named 'pymongo'
+ImportError: No module named 'pymysql'
+```
+
+**Solutions:**
+
+Memori has minimal dependencies by default. Install database drivers as needed:
+
+```bash
+# PostgreSQL (psycopg2)
+pip install psycopg2-binary
+
+# PostgreSQL (psycopg3) - recommended for CockroachDB
+pip install "memori[cockroachdb]"
+# or manually:
+pip install "psycopg[binary]>=3.1.0"
+
+# MongoDB
+pip install pymongo
+
+# MySQL/MariaDB
+pip install pymysql
+
+# Oracle
+pip install oracledb
+```
+
+**All drivers at once (development):**
+```bash
+pip install psycopg2-binary psycopg[binary] pymongo pymysql
+```
+
+</Accordion>
+
+### SSL Certificate Errors
+
+<Accordion title="SSL: CERTIFICATE_VERIFY_FAILED">
+
+**Problem:** SSL verification fails when connecting to Memori API or databases.
+
+**Symptoms:**
+```
+SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed
+```
+
+**Solutions:**
+
+1. **Update certificates** (recommended):
+   ```bash
+   # macOS
+   pip install --upgrade certifi
+   
+   # Ubuntu/Debian
+   sudo apt-get update
+   sudo apt-get install ca-certificates
+   
+   # RHEL/CentOS
+   sudo yum update ca-certificates
+   ```
+
+2. **Corporate proxy/firewall:** Configure SSL verification:
+   ```python
+   import os
+   os.environ['REQUESTS_CA_BUNDLE'] = '/path/to/ca-bundle.crt'
+   ```
+
+3. **Development only - disable verification** (NOT for production):
+   ```python
+   import urllib3
+   urllib3.disable_warnings()
+   ```
+
+</Accordion>
+
+## Configuration Issues
+
+### API Key Not Recognized
+
+<Accordion title="MEMORI_API_KEY environment variable issues">
+
+**Problem:** API key not being recognized or applied.
+
+**Symptoms:**
+- Still hitting IP-based quota limits
+- Authentication errors
+- Quota command shows lower limits than expected
+
+**Solutions:**
+
+<Steps>
+
+<Step title="Verify API key is set">
+  ```bash
+  echo $MEMORI_API_KEY
+  ```
+  Should output your API key. If empty, set it:
+  ```bash
+  export MEMORI_API_KEY="your_api_key_here"
+  ```
+</Step>
+
+<Step title="Check for whitespace">
+  Remove any extra whitespace:
+  ```bash
+  export MEMORI_API_KEY=$(echo $MEMORI_API_KEY | tr -d '[:space:]')
+  ```
+</Step>
+
+<Step title="Restart your application">
+  Environment variables are read at startup. Restart your application after setting the key.
+</Step>
+
+<Step title="Verify in code">
+  ```python
+  import os
+  print(f"API Key: {os.getenv('MEMORI_API_KEY')}")
+  ```
+</Step>
+
+<Step title="Make persistent (Linux/Mac)">
+  Add to your shell profile:
+  ```bash
+  echo 'export MEMORI_API_KEY="your_key"' >> ~/.bashrc
+  source ~/.bashrc
+  ```
+</Step>
+
+</Steps>
+
+</Accordion>
+
+### Connection String Issues
+
+<Accordion title="Database connection string errors">
+
+**Problem:** Cannot connect to database using connection string.
+
+**Symptoms:**
+```
+OperationalError: could not connect to server
+ConnectionError: connection refused
+```
+
+**Solutions:**
+
+1. **Verify connection string format:**
+   ```python
+   # PostgreSQL
+   "postgresql://user:password@host:5432/database"
+   
+   # CockroachDB
+   "postgresql://user:password@host:26257/defaultdb?sslmode=verify-full"
+   
+   # MongoDB
+   "mongodb://user:password@host:27017/database"
+   
+   # MySQL
+   "mysql://user:password@host:3306/database"
+   ```
+
+2. **Check URL encoding for special characters:**
+   ```python
+   from urllib.parse import quote_plus
+   
+   password = "p@ssw0rd!#$"
+   encoded_password = quote_plus(password)
+   connection_string = f"postgresql://user:{encoded_password}@host/db"
+   ```
+
+3. **Test connectivity separately:**
+   ```bash
+   # PostgreSQL
+   psql "postgresql://user:password@host:5432/database"
+   
+   # MongoDB
+   mongosh "mongodb://user:password@host:27017/database"
+   ```
+
+4. **Verify network access:**
+   ```bash
+   # Test if port is accessible
+   nc -zv host 5432  # PostgreSQL
+   nc -zv host 26257 # CockroachDB
+   nc -zv host 27017 # MongoDB
+   ```
+
+</Accordion>
+
+### Embedding Model Download Failures
+
+<Accordion title="Cannot download sentence-transformers models">
+
+**Problem:** Embedding model download fails or times out.
+
+**Symptoms:**
+```
+OSError: Can't load model
+HTTPError: 503 Server Error
+```
+
+**Solutions:**
+
+1. **Manual download with retry:**
+   ```bash
+   python -m memori setup
+   ```
+
+2. **Configure cache directory:**
+   ```bash
+   export TRANSFORMERS_CACHE="/path/to/cache"
+   export SENTENCE_TRANSFORMERS_HOME="/path/to/cache"
+   python -m memori setup
+   ```
+
+3. **Use offline mode (pre-download):**
+   ```python
+   from sentence_transformers import SentenceTransformer
+   
+   # Download on machine with internet
+   model = SentenceTransformer("all-MiniLM-L6-v2")
+   model.save("/path/to/model")
+   
+   # Load on offline machine
+   model = SentenceTransformer("/path/to/model")
+   ```
+
+4. **Check firewall/proxy settings:**
+   ```bash
+   export HTTP_PROXY="http://proxy:8080"
+   export HTTPS_PROXY="http://proxy:8080"
+   python -m memori setup
+   ```
+
+</Accordion>
+
+## Runtime Issues
+
+### Memory Not Being Recalled
+
+<Accordion title="LLM interactions not recalling previous context">
+
+**Problem:** Memori not recalling memories from previous interactions.
+
+**Symptoms:**
+- LLM doesn't remember previous conversations
+- No context from past sessions
+- Memories created but not retrieved
+
+**Solutions:**
+
+<Steps>
+
+<Step title="Verify attribution is set">
+  ```python
+  from memori import Memori
+  from openai import OpenAI
+  
+  mem = Memori()
+  client = mem.llm.register(OpenAI())
+  
+  # REQUIRED: Set attribution before interactions
+  mem.attribution(entity_id="user_123", process_id="agent")
+  
+  # Verify it's set
+  print(f"Entity: {mem.config.entity_id}")
+  print(f"Process: {mem.config.process_id}")
+  print(f"Session: {mem.config.session_id}")
+  ```
+</Step>
+
+<Step title="Check recall configuration">
+  ```python
+  # Ensure recall limits are reasonable
+  print(f"Embeddings limit: {mem.config.recall_embeddings_limit}")
+  print(f"Facts limit: {mem.config.recall_facts_limit}")
+  print(f"Relevance threshold: {mem.config.recall_relevance_threshold}")
+  
+  # Increase if too restrictive
+  mem.config.recall_embeddings_limit = 2000
+  mem.config.recall_relevance_threshold = 0.05
+  ```
+</Step>
+
+<Step title="Verify memories are being created">
+  Check the dashboard at [app.memorilabs.ai](https://app.memorilabs.ai) to see if memories are being stored.
+</Step>
+
+<Step title="Check quota status">
+  ```bash
+  python -m memori quota
+  ```
+  If quota is exceeded, new memories won't be created.
+</Step>
+
+</Steps>
+
+</Accordion>
+
+### Slow Performance
+
+<Accordion title="High latency or slow response times">
+
+**Problem:** Memori operations are slower than expected.
+
+**Symptoms:**
+- High latency (>500ms) for memory recall
+- Slow LLM response times
+- Application feels sluggish
+
+**Solutions:**
+
+1. **Optimize recall settings:**
+   ```python
+   mem.config.recall_embeddings_limit = 500  # Reduce search space
+   mem.config.recall_facts_limit = 3         # Fewer facts
+   mem.config.recall_relevance_threshold = 0.2  # Stricter filtering
+   ```
+
+2. **Use faster embedding model:**
+   ```bash
+   export MEMORI_EMBEDDINGS_MODEL="all-MiniLM-L6-v2"
+   python -m memori setup
+   ```
+
+3. **Check database performance (BYODB):**
+   ```sql
+   -- PostgreSQL: Check slow queries
+   SELECT query, mean_exec_time
+   FROM pg_stat_statements
+   ORDER BY mean_exec_time DESC
+   LIMIT 10;
+   
+   -- Ensure indexes exist
+   \di memories
+   ```
+
+4. **Use connection pooling:**
+   ```python
+   import psycopg2.pool
+   
+   pool = psycopg2.pool.ThreadedConnectionPool(
+       minconn=5,
+       maxconn=20,
+       host="localhost",
+       database="memori"
+   )
+   
+   mem = Memori().storage.register(pool.getconn())
+   ```
+
+5. **Profile your code:**
+   ```python
+   import time
+   
+   start = time.time()
+   response = client.chat.completions.create(...)
+   print(f"LLM call: {time.time() - start:.3f}s")
+   ```
+
+See [Performance Tuning](/advanced/performance-tuning) for more optimization strategies.
+
+</Accordion>
+
+### Memory Leaks
+
+<Accordion title="Application memory usage growing over time">
+
+**Problem:** Python process memory usage continuously increases.
+
+**Symptoms:**
+- High RAM usage
+- OOM (Out of Memory) errors after running for extended periods
+- Slow degradation of performance
+
+**Solutions:**
+
+1. **Reduce thread pool size:**
+   ```python
+   from concurrent.futures import ThreadPoolExecutor
+   mem.config.thread_pool_executor = ThreadPoolExecutor(max_workers=5)
+   ```
+
+2. **Explicitly close connections:**
+   ```python
+   # For BYODB
+   connection = psycopg2.connect(...)
+   mem = Memori().storage.register(connection)
+   
+   # When done
+   connection.close()
+   ```
+
+3. **Process in batches:**
+   ```python
+   for batch in chunked(items, 100):
+       process_batch(batch)
+       # Reset cache periodically
+       mem.config.reset_cache()
+   ```
+
+4. **Monitor with memory profiler:**
+   ```bash
+   pip install memory-profiler
+   python -m memory_profiler your_script.py
+   ```
+
+</Accordion>
+
+## LLM Provider Issues
+
+### OpenAI Integration Issues
+
+<Accordion title="OpenAI client not working with Memori">
+
+**Problem:** OpenAI client fails or doesn't integrate properly.
+
+**Symptoms:**
+```
+AttributeError: 'OpenAI' object has no attribute '_memori'
+TypeError: unsupported operand type(s)
+```
+
+**Solutions:**
+
+1. **Verify OpenAI version:**
+   ```bash
+   pip show openai
+   # Requires openai>=1.0.0
+   pip install --upgrade openai
+   ```
+
+2. **Correct initialization order:**
+   ```python
+   from memori import Memori
+   from openai import OpenAI
+   
+   # Correct: Register client with Memori
+   client = OpenAI()
+   mem = Memori().llm.register(client)
+   
+   # Set attribution before use
+   mem.attribution(entity_id="user", process_id="agent")
+   
+   # Now use client
+   response = client.chat.completions.create(...)
+   ```
+
+3. **Check API key:**
+   ```bash
+   echo $OPENAI_API_KEY
+   ```
+
+4. **Test without Memori first:**
+   ```python
+   from openai import OpenAI
+   
+   client = OpenAI()
+   response = client.chat.completions.create(
+       model="gpt-4o-mini",
+       messages=[{"role": "user", "content": "test"}]
+   )
+   print(response.choices[0].message.content)
+   ```
+
+</Accordion>
+
+### Anthropic Integration Issues
+
+<Accordion title="Anthropic Claude client issues">
+
+**Problem:** Anthropic client not working with Memori.
+
+**Solutions:**
+
+1. **Verify Anthropic SDK version:**
+   ```bash
+   pip show anthropic
+   pip install --upgrade anthropic
+   ```
+
+2. **Correct usage:**
+   ```python
+   from memori import Memori
+   from anthropic import Anthropic
+   
+   client = Anthropic()
+   mem = Memori().llm.register(client)
+   mem.attribution(entity_id="user_123", process_id="claude_agent")
+   
+   response = client.messages.create(
+       model="claude-3-5-sonnet-20241022",
+       max_tokens=1024,
+       messages=[{"role": "user", "content": "Hello"}]
+   )
+   ```
+
+3. **Check API key:**
+   ```bash
+   echo $ANTHROPIC_API_KEY
+   ```
+
+</Accordion>
+
+### Streaming Not Working
+
+<Accordion title="Streaming responses fail or are incomplete">
+
+**Problem:** Streaming LLM responses don't work properly with Memori.
+
+**Symptoms:**
+- Stream stops prematurely
+- Incomplete responses
+- Memory not recorded for streamed content
+
+**Solutions:**
+
+1. **Ensure proper iteration:**
+   ```python
+   stream = client.chat.completions.create(
+       model="gpt-4o-mini",
+       messages=[{"role": "user", "content": "Tell a story"}],
+       stream=True
+   )
+   
+   # Iterate through ALL chunks
+   for chunk in stream:
+       if chunk.choices[0].delta.content:
+           print(chunk.choices[0].delta.content, end="")
+   
+   # Memory recorded after stream completes
+   ```
+
+2. **Don't manually close stream early:**
+   ```python
+   # Wrong: Closing stream early
+   for i, chunk in enumerate(stream):
+       if i > 10:
+           break  # Memory won't be recorded!
+   
+   # Correct: Consume entire stream
+   for chunk in stream:
+       process(chunk)
+   ```
+
+3. **Async streaming:**
+   ```python
+   from openai import AsyncOpenAI
+   
+   client = AsyncOpenAI()
+   mem = Memori().llm.register(client)
+   
+   stream = await client.chat.completions.create(
+       model="gpt-4o-mini",
+       messages=[{"role": "user", "content": "Hello"}],
+       stream=True
+   )
+   
+   async for chunk in stream:
+       if chunk.choices[0].delta.content:
+           print(chunk.choices[0].delta.content, end="")
+   ```
+
+</Accordion>
+
+## Database-Specific Issues
+
+### PostgreSQL Connection Issues
+
+<Accordion title="Cannot connect to PostgreSQL/CockroachDB">
+
+**Problem:** PostgreSQL or CockroachDB connection fails.
+
+**Common errors:**
+```
+psycopg2.OperationalError: could not connect to server
+psycopg2.OperationalError: FATAL: password authentication failed
+ssl.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED]
+```
+
+**Solutions:**
+
+1. **Verify connection parameters:**
+   ```python
+   import psycopg2
+   
+   connection = psycopg2.connect(
+       host="localhost",
+       port=5432,
+       database="memori",
+       user="postgres",
+       password="your_password",
+       sslmode="prefer"  # or "require" for CockroachDB
+   )
+   ```
+
+2. **Test connection separately:**
+   ```bash
+   psql -h localhost -p 5432 -U postgres -d memori
+   ```
+
+3. **CockroachDB SSL requirements:**
+   ```python
+   # CockroachDB requires SSL
+   connection = psycopg2.connect(
+       "postgresql://user:password@host:26257/defaultdb?sslmode=verify-full"
+   )
+   ```
+
+4. **Check firewall:**
+   ```bash
+   # Test port accessibility
+   nc -zv localhost 5432
+   ```
+
+5. **Verify PostgreSQL is running:**
+   ```bash
+   # Linux
+   sudo systemctl status postgresql
+   
+   # macOS
+   brew services list | grep postgresql
+   
+   # Docker
+   docker ps | grep postgres
+   ```
+
+</Accordion>
+
+### MongoDB Connection Issues
+
+<Accordion title="Cannot connect to MongoDB">
+
+**Problem:** MongoDB connection fails.
+
+**Common errors:**
+```
+pymongo.errors.ServerSelectionTimeoutError
+pymongo.errors.ConfigurationError
+```
+
+**Solutions:**
+
+1. **Verify connection string:**
+   ```python
+   from pymongo import MongoClient
+   
+   # Standard MongoDB
+   client = MongoClient("mongodb://localhost:27017/")
+   
+   # MongoDB Atlas
+   client = MongoClient(
+       "mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority"
+   )
+   
+   # With authentication
+   client = MongoClient(
+       host="localhost",
+       port=27017,
+       username="user",
+       password="password",
+       authSource="admin"
+   )
+   ```
+
+2. **Test connection:**
+   ```bash
+   mongosh "mongodb://localhost:27017"
+   ```
+
+3. **Check MongoDB is running:**
+   ```bash
+   # Linux
+   sudo systemctl status mongod
+   
+   # macOS
+   brew services list | grep mongodb
+   
+   # Docker
+   docker ps | grep mongo
+   ```
+
+4. **Verify network access:**
+   ```bash
+   nc -zv localhost 27017
+   ```
+
+</Accordion>
+
+### SQLite Permission Issues
+
+<Accordion title="SQLite database permission errors">
+
+**Problem:** Cannot create or write to SQLite database.
+
+**Symptoms:**
+```
+sqlite3.OperationalError: unable to open database file
+PermissionError: [Errno 13] Permission denied
+```
+
+**Solutions:**
+
+1. **Check file permissions:**
+   ```bash
+   ls -l memori.db
+   chmod 644 memori.db  # Read/write for owner
+   ```
+
+2. **Ensure directory exists and is writable:**
+   ```bash
+   mkdir -p ~/.memori
+   chmod 755 ~/.memori
+   ```
+
+3. **Use absolute path:**
+   ```python
+   import sqlite3
+   import os
+   from memori import Memori
+   
+   db_path = os.path.expanduser("~/.memori/memori.db")
+   os.makedirs(os.path.dirname(db_path), exist_ok=True)
+   
+   connection = sqlite3.connect(db_path)
+   mem = Memori().storage.register(connection)
+   ```
+
+4. **Check disk space:**
+   ```bash
+   df -h .
+   ```
+
+</Accordion>
+
+## CockroachDB Cluster Management
+
+### Cluster Creation Fails
+
+<Accordion title="CockroachDB cluster start command fails">
+
+**Problem:** `python -m memori cockroachdb cluster start` fails.
+
+**Symptoms:**
+```
+RuntimeError: the cluster failed to come online
+ModuleNotFoundError: No module named 'psycopg'
+```
+
+**Solutions:**
+
+1. **Install required dependencies:**
+   ```bash
+   pip install "memori[cockroachdb]"
+   # or manually:
+   pip install "psycopg[binary]>=3.1.0"
+   ```
+
+2. **Wait longer (can take 2+ minutes):**
+   The cluster creation process can take several minutes. Be patient.
+
+3. **Check network connectivity:**
+   ```bash
+   curl -I https://api.memorilabs.ai
+   ```
+
+4. **Verify API access:**
+   ```bash
+   python -m memori quota
+   ```
+
+5. **Try again:**
+   If it fails, the cluster is automatically cleaned up. Simply retry:
+   ```bash
+   python -m memori cockroachdb cluster start
+   ```
+
+</Accordion>
+
+### Cannot Access Cluster
+
+<Accordion title="Lost connection string or cannot access cluster">
+
+**Problem:** Lost CockroachDB connection string or cannot connect.
+
+**Solutions:**
+
+<Warning>
+**Important:** Memori Labs cannot recover lost connection strings. The connection string is displayed only once during cluster creation for security reasons.
+</Warning>
+
+If you lost your connection string:
+
+1. **Delete the old cluster:**
+   ```bash
+   python -m memori cockroachdb cluster delete
+   ```
+
+2. **Create a new cluster:**
+   ```bash
+   python -m memori cockroachdb cluster start
+   ```
+
+3. **Save the connection string immediately** in a secure password manager.
+
+</Accordion>
+
+## Getting Help
+
+### Collect Diagnostic Information
+
+When reporting issues, include:
+
+```bash
+# System information
+python --version
+pip show memori
+pip show openai anthropic google-genai  # If using
+
+# Environment
+echo $MEMORI_API_KEY | cut -c1-10  # First 10 chars only
+echo $MEMORI_EMBEDDINGS_MODEL
+
+# Test basic functionality
+python -m memori quota
+
+# Enable debug logging
+export MEMORI_DEBUG=1
+python your_script.py 2>&1 | tee debug.log
+```
+
+### Enable Debug Logging
+
+```python
+import logging
+
+# Enable Memori debug logs
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("memori")
+logger.setLevel(logging.DEBUG)
+
+# Your code here
+```
+
+### Common Error Messages
+
+| Error Message | Likely Cause | Quick Fix |
+|---------------|--------------|----------|
+| `ModuleNotFoundError: No module named 'memori'` | Not installed | `pip install memori` |
+| `No attribution set` | Missing attribution | `mem.attribution(entity_id=..., process_id=...)` |
+| `could not connect to server` | Database unreachable | Check connection string, network |
+| `CERTIFICATE_VERIFY_FAILED` | SSL certificate issue | Update certificates |
+| `quota exceeded` | Hit quota limit | Sign up for API key or upgrade |
+| `No module named 'psycopg'` | Missing driver | `pip install memori[cockroachdb]` |
+
+### Support Channels
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/abD4eGym6v">
+    Get help from the community and Memori team
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/MemoriLabs/Memori/issues">
+    Report bugs and request features
+  </Card>
+  <Card title="Documentation" icon="book" href="https://memorilabs.ai/docs">
+    Browse complete documentation
+  </Card>
+  <Card title="Email Support" icon="envelope" href="mailto:noc@memorilabs.ai">
+    Contact the Memori team directly
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Usage" icon="terminal" href="/advanced/cli-usage">
+    Master the Memori CLI
+  </Card>
+  <Card title="Performance Tuning" icon="gauge-high" href="/advanced/performance-tuning">
+    Optimize your deployment
+  </Card>
+  <Card title="Quota Management" icon="chart-line" href="/advanced/quota-management">
+    Monitor and manage quota
+  </Card>
+  <Card title="Contributing" icon="code" href="/contributing/overview">
+    Contribute to Memori
+  </Card>
+</CardGroup>

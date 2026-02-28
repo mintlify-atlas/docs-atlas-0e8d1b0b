@@ -1,0 +1,311 @@
+---
+title: "Memori"
+description: "Core Memori class for managing memory-augmented AI applications"
+---
+
+## Overview
+
+The `Memori` class is the main entry point for the Memori SDK. It provides methods for managing memory attribution, sessions, recall, and LLM integrations.
+
+## Constructor
+
+<ParamField path="conn" type="Callable[[], Any] | Any | None" default="None">
+  Database connection or connection factory. Can be:
+  - A callable that returns a database connection
+  - A database connection object directly
+  - `None` to use cloud-based storage (requires `MEMORI_API_KEY`)
+  
+  Supported databases: PostgreSQL, CockroachDB, SQLite, MongoDB, OceanBase
+</ParamField>
+
+<ParamField path="debug_truncate" type="bool" default="True">
+  Whether to truncate long content in debug logs for readability
+</ParamField>
+
+## Initialization
+
+```python
+from memori import Memori
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+# Using PostgreSQL
+engine = create_engine("postgresql://user:pass@localhost/db")
+Session = sessionmaker(bind=engine)
+mem = Memori(conn=Session)
+
+# Using cloud storage
+mem = Memori()  # Requires MEMORI_API_KEY environment variable
+```
+
+## Methods
+
+### attribution()
+
+Set entity and process identifiers for memory attribution.
+
+<ParamField path="entity_id" type="str | None" default="None">
+  Unique identifier for the entity (e.g., user ID, customer ID). Maximum 100 characters.
+</ParamField>
+
+<ParamField path="process_id" type="str | None" default="None">
+  Identifier for the process or application context. Maximum 100 characters.
+</ParamField>
+
+<ResponseField name="return" type="Memori">
+  Returns self for method chaining
+</ResponseField>
+
+```python
+mem.attribution(entity_id="user-123", process_id="my-app")
+```
+
+### new_session()
+
+Create a new session with a fresh UUID. This resets the session context and cache.
+
+<ResponseField name="return" type="Memori">
+  Returns self for method chaining
+</ResponseField>
+
+```python
+# Start a new conversation session
+mem.new_session()
+```
+
+### set_session()
+
+Set an existing session ID to continue a previous session.
+
+<ParamField path="id" type="str | UUID">
+  The session ID to use
+</ParamField>
+
+<ResponseField name="return" type="Memori">
+  Returns self for method chaining
+</ResponseField>
+
+```python
+from uuid import UUID
+
+session_id = UUID("123e4567-e89b-12d3-a456-426614174000")
+mem.set_session(session_id)
+```
+
+### recall()
+
+Retrieve relevant memories based on a query string.
+
+<ParamField path="query" type="str" required>
+  The search query to find relevant memories
+</ParamField>
+
+<ParamField path="limit" type="int | None" default="None">
+  Maximum number of facts to return. Defaults to `config.recall_facts_limit` (5)
+</ParamField>
+
+<ResponseField name="return" type="list[FactSearchResult | Mapping[str, object] | str]">
+  List of relevant memory facts matching the query
+</ResponseField>
+
+```python
+# Retrieve memories about user preferences
+facts = mem.recall("What is the user's favorite color?", limit=10)
+for fact in facts:
+    print(fact)
+```
+
+### embed_texts()
+
+Generate embeddings for text inputs using the configured embedding model.
+
+<ParamField path="texts" type="str | list[str]" required>
+  Single text string or list of text strings to embed
+</ParamField>
+
+<ParamField path="async_" type="bool" default="False">
+  If True, returns an awaitable that runs embedding in a threadpool
+</ParamField>
+
+<ResponseField name="return" type="list[list[float]] | Awaitable[list[list[float]]]">
+  List of embedding vectors, one per input text. Returns awaitable if `async_=True`
+</ResponseField>
+
+```python
+# Synchronous embedding
+embeddings = mem.embed_texts(["Hello world", "Goodbye world"])
+print(len(embeddings))  # 2
+print(len(embeddings[0]))  # Embedding dimension (e.g., 384)
+
+# Asynchronous embedding
+import asyncio
+
+async def main():
+    embeddings = await mem.embed_texts("Hello world", async_=True)
+    print(embeddings)
+
+asyncio.run(main())
+```
+
+### close()
+
+Close the underlying storage connection or session. Important for long-running processes like web servers to release database connections.
+
+```python
+mem.close()
+
+# Or use context manager
+with Memori(conn=Session) as mem:
+    mem.attribution(entity_id="user-123")
+    # ... use mem ...
+# Automatically closed when exiting context
+```
+
+## LLM Integration
+
+The `Memori` class provides built-in integration with multiple LLM providers:
+
+### llm.register()
+
+Register an LLM client for automatic memory augmentation.
+
+<ParamField path="client" type="Any" default="None">
+  Generic LLM client (auto-detected provider)
+</ParamField>
+
+<ParamField path="openai_chat" type="OpenAIChat" default="None">
+  OpenAI chat completion client
+</ParamField>
+
+<ParamField path="claude" type="Anthropic" default="None">
+  Anthropic Claude client
+</ParamField>
+
+<ParamField path="gemini" type="GoogleGenerativeModel" default="None">
+  Google Gemini client
+</ParamField>
+
+<ParamField path="xai" type="XAI" default="None">
+  xAI client
+</ParamField>
+
+<ParamField path="chatbedrock" type="ChatBedrock" default="None">
+  LangChain ChatBedrock
+</ParamField>
+
+<ParamField path="chatgooglegenai" type="ChatGoogleGenerativeAI" default="None">
+  LangChain ChatGoogleGenerativeAI
+</ParamField>
+
+<ParamField path="chatopenai" type="ChatOpenAI" default="None">
+  LangChain ChatOpenAI
+</ParamField>
+
+<ParamField path="chatvertexai" type="ChatVertexAI" default="None">
+  LangChain ChatVertexAI
+</ParamField>
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key="sk-...")
+mem = Memori(conn=Session).llm.register(client)
+
+# Now use client as normal - Memori automatically augments it
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### Provider-Specific Integrations
+
+Memori also provides direct access to provider-specific integrations:
+
+- `mem.openai` - OpenAI integration
+- `mem.anthropic` - Anthropic Claude integration
+- `mem.google` - Google Gemini integration
+- `mem.xai` - xAI integration
+- `mem.langchain` - LangChain integration
+- `mem.agno` - Agno integration
+- `mem.pydantic_ai` - Pydantic AI integration
+
+## Configuration
+
+Access and modify configuration through `mem.config`:
+
+```python
+# Set recall limits
+mem.config.recall_facts_limit = 10
+mem.config.recall_embeddings_limit = 2000
+
+# Set embedding model
+mem.config.embeddings.model = "all-MiniLM-L6-v2"
+
+# Access session ID
+print(mem.config.session_id)
+
+# Build database schema
+mem.config.storage.build()
+```
+
+## Context Manager Support
+
+The `Memori` class supports Python's context manager protocol:
+
+```python
+with Memori(conn=Session) as mem:
+    mem.attribution(entity_id="user-123", process_id="app-1")
+    facts = mem.recall("user preferences")
+    # Connection automatically closed on exit
+```
+
+## Complete Example
+
+```python
+import os
+from openai import OpenAI
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+engine = create_engine(os.getenv("DATABASE_CONNECTION_STRING"))
+Session = sessionmaker(bind=engine)
+
+mem = Memori(conn=Session).llm.register(client)
+mem.attribution(entity_id="user-123", process_id="my-app")
+mem.config.storage.build()
+
+# First conversation
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "My favorite color is blue and I live in Paris"
+    }]
+)
+print(response1.choices[0].message.content)
+
+# Later conversation - Memori remembers!
+response2 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{
+        "role": "user",
+        "content": "What's my favorite color?"
+    }]
+)
+print(response2.choices[0].message.content)
+
+# Wait for async memory processing to complete
+mem.augmentation.wait()
+mem.close()
+```
+
+## See Also
+
+- [Attribution](/api/python/attribution) - Memory attribution methods
+- [Sessions](/api/python/sessions) - Session management
+- [Recall](/api/python/recall) - Memory recall API
+- [Embeddings](/api/python/embeddings) - Embeddings API

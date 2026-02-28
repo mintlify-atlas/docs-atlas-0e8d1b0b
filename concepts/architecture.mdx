@@ -1,0 +1,289 @@
+---
+title: Architecture
+description: Understand how Memori's architecture works — from your app to storage, with managed augmentation, recall, and multi-database support.
+---
+
+# Architecture
+
+Memori is a modular memory platform for AI applications. Connect your LLM client, set attribution, and Memori handles the rest — storage, augmentation, knowledge graph construction, and recall.
+
+## System Overview
+
+Memori operates in two deployment modes: **Memori Cloud** (managed service) and **BYODB** (bring your own database).
+
+### Memori Cloud Architecture
+
+![Memori Cloud System Overview](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/memori-cloud-architecture-detail.webp)
+
+### BYODB Architecture
+
+![Memori BYODB System Overview](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/memori-byodb-architecture-detail.webp)
+
+## Core Components
+
+### Memori SDK
+
+The integration layer between your app and memory storage. It provides:
+
+- **LLM Wrappers** — Transparent interception of LLM calls for OpenAI, Anthropic, Google, XAI, and more
+- **Attribution System** — Tags every memory with entity, process, and session metadata
+- **Recall API** — Retrieves relevant memories via semantic search
+- **Configuration** — Tunable parameters for recall, embeddings, and augmentation
+
+**Key modules** (located in `memori/`):
+- `__init__.py:73-180` — Main `Memori` class with attribution and recall methods
+- `llm/` — LLM provider wrappers and registry
+- `memory/` — Memory capture, augmentation, and recall logic
+
+### Storage Layer
+
+Memori supports multiple storage backends through an adapter pattern:
+
+**Adapters** (auto-detected based on connection type):
+- **SQLAlchemy** — Works with `sessionmaker` from SQLAlchemy
+- **Django ORM** — Integrates with Django's database layer
+- **DB-API 2.0** — Standard Python database connections (e.g., `sqlite3.connect()`)
+- **MongoDB** — NoSQL document storage
+
+**Drivers** (database-specific implementations):
+- PostgreSQL, MySQL, MariaDB, Oracle
+- SQLite (for development and testing)
+- CockroachDB, OceanBase
+- MongoDB
+
+**Source location**: `memori/storage/`
+
+### Advanced Augmentation Engine
+
+Processes raw conversations into structured memory through:
+
+1. **Conversation Analysis** — Reads user and assistant messages from the LLM exchange
+2. **Memory Extraction** — Uses AI to identify facts, preferences, skills, and attributes
+3. **Semantic Triple Generation** — Extracts subject-predicate-object relationships for knowledge graphs
+4. **Embedding Generation** — Creates vector embeddings for semantic search
+5. **Deduplication** — Merges similar memories and increments mention counts
+
+**Implementation details**:
+- Runs asynchronously with configurable worker pools (default: 50 workers)
+- Uses batched database writes (batch size: 100, timeout: 0.1s)
+- Queue-based processing to avoid blocking the main request path
+- Automatic retry with exponential backoff on transient failures
+
+**Source location**: `memori/memory/augmentation/`
+- `_manager.py:34-211` — Augmentation manager and async processing
+- `augmentations/memori/_augmentation.py` — Core extraction logic
+
+### Recall Engine
+
+Surfaces relevant memories at the right time:
+
+**Semantic Search Process**:
+1. Embed the query using the configured embedding model
+2. Load up to `recall_embeddings_limit` facts from storage (default: 1000)
+3. Use FAISS with cosine similarity (L2-normalized inner product) to rank facts
+4. Filter by `recall_relevance_threshold` (default: 0.1)
+5. Return top N facts (default: 5)
+
+**FAISS Integration**:
+- Uses `IndexFlatIP` for exact similarity search
+- L2 normalization for cosine similarity
+- Dimension matching between query and stored embeddings
+
+**Source location**: 
+- `memori/memory/recall.py:37-227` — Recall implementation
+- `memori/search/_faiss.py:81-122` — FAISS similarity search
+
+### Connection Management
+
+Memori uses a context manager pattern for database connections:
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+# Context manager automatically handles cleanup
+with Memori() as mem:
+    client = OpenAI()
+    mem.llm.register(client)
+    mem.attribution(entity_id="user_123", process_id="my_agent")
+    
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+# Connection automatically closed on exit
+```
+
+**Manual connection management**:
+
+```python
+mem = Memori()
+# ... use Memori ...
+mem.close()  # Explicitly release connections
+```
+
+## Data Flow
+
+### 1. Conversation Capture
+
+Every LLM call through the wrapped client is captured:
+
+```python
+# Memori intercepts this call
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "I use Python"}]
+)
+# Response returns immediately — no blocking
+```
+
+The conversation is stored with:
+- Entity ID, Process ID, Session ID
+- Conversation ID (groups messages within a session)
+- Individual messages with roles (user, assistant, system)
+
+### 2. Attribution Tracking
+
+Attribution is cached to avoid repeated database lookups:
+
+```python
+# First call resolves and caches IDs
+mem.attribution(entity_id="user_alice", process_id="bot")
+# Cache stores: entity_id, process_id, session_id, conversation_id
+
+# Subsequent calls reuse cached IDs
+```
+
+**Cache reset** on new session:
+
+```python
+mem.new_session()  # Clears conversation_id from cache
+```
+
+### 3. Asynchronous Augmentation
+
+After conversation capture, augmentation runs in the background:
+
+```python
+# Your app continues immediately
+response = client.chat.completions.create(...)
+
+# Meanwhile, in background:
+# 1. Extract facts from conversation
+# 2. Generate embeddings
+# 3. Build knowledge graph triples
+# 4. Write to database in batches
+```
+
+**For short-lived scripts**, wait for augmentation to complete:
+
+```python
+mem.augmentation.wait(timeout=30)  # Block until augmentation finishes
+```
+
+### 4. Context Recall
+
+On each LLM call, Memori automatically injects relevant memories:
+
+```python
+# User asks a new question
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What languages do I use?"}]
+)
+
+# Memori automatically:
+# 1. Embeds the query
+# 2. Searches for similar facts
+# 3. Injects top facts into system prompt
+# 4. Forwards enriched request to LLM
+```
+
+## Configuration Options
+
+Key configuration parameters in the `Config` class (`memori/_config.py`):
+
+| Parameter                       | Default       | Description                                  |
+| ------------------------------- | ------------- | -------------------------------------------- |
+| `recall_embeddings_limit`       | `1000`        | Max embeddings to load for similarity search |
+| `recall_facts_limit`            | `5`           | Default number of facts to return            |
+| `recall_relevance_threshold`    | `0.1`         | Minimum similarity score to include a fact   |
+| `session_timeout_minutes`       | `30`          | Session idle timeout                         |
+| `request_num_backoff`           | `5`           | Number of retry attempts on API failures     |
+| `request_backoff_factor`        | `1`           | Exponential backoff multiplier               |
+| `request_secs_timeout`          | `5`           | Request timeout in seconds                   |
+| `embeddings.model`              | `all-MiniLM-L6-v2` | Embedding model name                   |
+| `debug_truncate`                | `True`        | Truncate long content in debug logs          |
+
+## Deployment Modes
+
+### Memori Cloud
+
+```python
+import os
+from memori import Memori
+from openai import OpenAI
+
+# Set your API key
+os.environ["MEMORI_API_KEY"] = "your-api-key"
+
+# Memori automatically uses cloud mode
+mem = Memori()
+client = OpenAI()
+mem.llm.register(client)
+mem.attribution(entity_id="user_123", process_id="my_agent")
+```
+
+### BYODB (Bring Your Own Database)
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from memori import Memori
+from openai import OpenAI
+
+engine = create_engine("postgresql://user:pass@localhost/memori")
+SessionLocal = sessionmaker(bind=engine)
+
+mem = Memori(conn=SessionLocal)
+client = OpenAI()
+mem.llm.register(client)
+mem.attribution(entity_id="user_123", process_id="my_agent")
+
+# Build schema (first time only)
+mem.config.storage.build()
+```
+
+### CockroachDB Support
+
+Memori detects CockroachDB automatically:
+
+```python
+import os
+from memori import Memori
+
+os.environ["MEMORI_COCKROACHDB_CONNECTION_STRING"] = "postgresql://..."
+
+mem = Memori()  # Automatically uses CockroachDB
+```
+
+## Thread Safety
+
+Memori uses a `ThreadPoolExecutor` (default: 15 workers) for async operations and manages connections safely across threads.
+
+```python
+# Safe for concurrent use
+from concurrent.futures import ThreadPoolExecutor
+
+def process_user(user_id):
+    mem = Memori(conn=SessionLocal)
+    # ... process ...
+    mem.close()
+
+with ThreadPoolExecutor(max_workers=10) as executor:
+    executor.map(process_user, user_ids)
+```
+
+<Info>
+  Each thread should create its own `Memori` instance with its own connection to ensure thread safety.
+</Info>

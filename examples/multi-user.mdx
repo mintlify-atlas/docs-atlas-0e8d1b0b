@@ -1,0 +1,443 @@
+---
+title: 'Multi-User Memory Management'
+description: 'Manage memories for multiple users with entity and process attribution'
+icon: 'users'
+---
+
+## Overview
+
+Memori uses **entity IDs** and **process IDs** to segment memories across users and workflows. This ensures each user has isolated, personalized memories.
+
+## Attribution Basics
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from memori import Memori
+    from openai import OpenAI
+
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+
+    # Set attribution for a specific user and workflow
+    mem.attribution(
+        entity_id="user-123",      # Unique user identifier
+        process_id="support-chat"  # Workflow/application identifier
+    )
+
+    # All subsequent LLM calls will use this attribution
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "I prefer email notifications"}],
+    )
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { Memori } from 'memori';
+    import { OpenAI } from 'openai';
+
+    const client = new OpenAI();
+    const mem = new Memori().llm.register(client);
+
+    // Set attribution for a specific user and workflow
+    mem.attribution(
+      'user-123',      // Unique user identifier
+      'support-chat'   // Workflow/application identifier
+    );
+
+    // All subsequent LLM calls will use this attribution
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: 'I prefer email notifications' }],
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Multi-User Web Application
+
+Here's a complete example of a web application handling multiple users.
+
+<Tabs>
+  <Tab title="Python (Flask)">
+    ```python
+    from flask import Flask, request, jsonify
+    from openai import OpenAI
+    from memori import Memori
+
+    app = Flask(__name__)
+    client = OpenAI()
+
+    @app.route('/chat', methods=['POST'])
+    def chat():
+        data = request.json
+        user_id = data.get('user_id')
+        message = data.get('message')
+        session_id = data.get('session_id')
+
+        # Create a new Memori instance for this request
+        mem = Memori().llm.register(client)
+        mem.attribution(entity_id=user_id, process_id="web-chat")
+
+        # Optionally resume an existing session
+        if session_id:
+            mem.set_session(session_id)
+
+        # Make LLM call with user-specific memory
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}],
+        )
+
+        return jsonify({
+            'response': response.choices[0].message.content,
+            'session_id': str(mem.config.session_id)
+        })
+
+    if __name__ == '__main__':
+        app.run()
+    ```
+  </Tab>
+
+  <Tab title="TypeScript (Express)">
+    ```typescript
+    import express from 'express';
+    import { OpenAI } from 'openai';
+    import { Memori } from 'memori';
+
+    const app = express();
+    app.use(express.json());
+
+    const client = new OpenAI();
+
+    app.post('/chat', async (req, res) => {
+      const { user_id, message, session_id } = req.body;
+
+      // Create a new Memori instance for this request
+      const mem = new Memori().llm.register(client);
+      mem.attribution(user_id, 'web-chat');
+
+      // Optionally resume an existing session
+      if (session_id) {
+        mem.setSession(session_id);
+      }
+
+      // Make LLM call with user-specific memory
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: message }],
+      });
+
+      res.json({
+        response: response.choices[0]?.message?.content,
+        session_id: mem.session.id,
+      });
+    });
+
+    app.listen(3000, () => {
+      console.log('Server running on port 3000');
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Session Management
+
+Memori uses session IDs to group related conversations. Each session represents a distinct conversation thread.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from memori import Memori
+    from openai import OpenAI
+
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+    mem.attribution(entity_id="user-123")
+
+    # Start a new conversation (automatic session ID)
+    response1 = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "I'm planning a trip to Tokyo"}],
+    )
+
+    # Save session ID for later
+    tokyo_session_id = mem.config.session_id
+    print(f"Session ID: {tokyo_session_id}")
+
+    # Start a completely new conversation
+    mem.new_session()
+    response2 = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "I'm planning a trip to Paris"}],
+    )
+
+    # Resume the Tokyo conversation
+    mem.set_session(tokyo_session_id)
+    response3 = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "What was I planning?"}],
+    )
+    # AI will remember: "You were planning a trip to Tokyo"
+    ```
+  </Tab>
+
+  <Tab title="TypeScript">
+    ```typescript
+    import { Memori } from 'memori';
+    import { OpenAI } from 'openai';
+
+    const client = new OpenAI();
+    const mem = new Memori().llm.register(client);
+    mem.attribution('user-123');
+
+    // Start a new conversation (automatic session ID)
+    const response1 = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: "I'm planning a trip to Tokyo" }],
+    });
+
+    // Save session ID for later
+    const tokyoSessionId = mem.session.id;
+    console.log(`Session ID: ${tokyoSessionId}`);
+
+    // Start a completely new conversation
+    mem.resetSession();
+    const response2 = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: "I'm planning a trip to Paris" }],
+    });
+
+    // Resume the Tokyo conversation
+    mem.setSession(tokyoSessionId);
+    const response3 = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: 'What was I planning?' }],
+    });
+    // AI will remember: "You were planning a trip to Tokyo"
+    ```
+  </Tab>
+</Tabs>
+
+## Multi-Tenant SaaS Application
+
+For SaaS applications, use both entity and process IDs to segment memories by customer and tenant.
+
+<CodeGroup>
+```python Python
+from memori import Memori
+from openai import OpenAI
+
+def handle_customer_request(tenant_id: str, customer_id: str, message: str):
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+
+    # Combine tenant and customer for unique entity ID
+    entity_id = f"{tenant_id}:{customer_id}"
+    process_id = f"tenant-{tenant_id}"
+
+    mem.attribution(entity_id=entity_id, process_id=process_id)
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": message}],
+    )
+
+    return response.choices[0].message.content
+
+# Example usage
+result = handle_customer_request(
+    tenant_id="acme-corp",
+    customer_id="alice",
+    message="What are my account preferences?"
+)
+```
+
+```typescript TypeScript
+import { Memori } from 'memori';
+import { OpenAI } from 'openai';
+
+async function handleCustomerRequest(
+  tenantId: string,
+  customerId: string,
+  message: string
+): Promise<string> {
+  const client = new OpenAI();
+  const mem = new Memori().llm.register(client);
+
+  // Combine tenant and customer for unique entity ID
+  const entityId = `${tenantId}:${customerId}`;
+  const processId = `tenant-${tenantId}`;
+
+  mem.attribution(entityId, processId);
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: message }],
+  });
+
+  return response.choices[0]?.message?.content || '';
+}
+
+// Example usage
+const result = await handleCustomerRequest(
+  'acme-corp',
+  'alice',
+  'What are my account preferences?'
+);
+```
+</CodeGroup>
+
+## Agent-Based Architecture
+
+Use different process IDs for different agents or workflows.
+
+<CodeGroup>
+```python Python
+from memori import Memori
+from openai import OpenAI
+
+class SupportAgent:
+    def __init__(self, user_id: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=user_id,
+            process_id="support-agent"
+        )
+
+    def respond(self, message: str) -> str:
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}],
+        )
+        return response.choices[0].message.content
+
+class SalesAgent:
+    def __init__(self, user_id: str):
+        self.client = OpenAI()
+        self.mem = Memori().llm.register(self.client)
+        self.mem.attribution(
+            entity_id=user_id,
+            process_id="sales-agent"
+        )
+
+    def respond(self, message: str) -> str:
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}],
+        )
+        return response.choices[0].message.content
+
+# Each agent maintains separate memories for the same user
+support = SupportAgent("user-123")
+sales = SalesAgent("user-123")
+```
+
+```typescript TypeScript
+import { Memori } from 'memori';
+import { OpenAI } from 'openai';
+
+class SupportAgent {
+  private client: OpenAI;
+  private mem: Memori;
+
+  constructor(userId: string) {
+    this.client = new OpenAI();
+    this.mem = new Memori().llm.register(this.client);
+    this.mem.attribution(userId, 'support-agent');
+  }
+
+  async respond(message: string): Promise<string> {
+    const response = await this.client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: message }],
+    });
+    return response.choices[0]?.message?.content || '';
+  }
+}
+
+class SalesAgent {
+  private client: OpenAI;
+  private mem: Memori;
+
+  constructor(userId: string) {
+    this.client = new OpenAI();
+    this.mem = new Memori().llm.register(this.client);
+    this.mem.attribution(userId, 'sales-agent');
+  }
+
+  async respond(message: string): Promise<string> {
+    const response = await this.client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: message }],
+    });
+    return response.choices[0]?.message?.content || '';
+  }
+}
+
+// Each agent maintains separate memories for the same user
+const support = new SupportAgent('user-123');
+const sales = new SalesAgent('user-123');
+```
+</CodeGroup>
+
+## Key Concepts
+
+<AccordionGroup>
+  <Accordion title="Entity ID" icon="user">
+    The unique identifier for an end-user. This is typically:
+    - User UUID from your database
+    - Email address (hashed for privacy)
+    - Customer ID
+    
+    Memories are isolated per entity_id.
+  </Accordion>
+
+  <Accordion title="Process ID" icon="gears">
+    The identifier for a workflow, application, or agent. This allows you to:
+    - Segment memories by use case (support vs sales)
+    - Maintain separate contexts for different agents
+    - Track memory usage by application
+  </Accordion>
+
+  <Accordion title="Session ID" icon="comments">
+    Represents a single conversation thread. Sessions are automatically generated but can be:
+    - Manually set to resume conversations
+    - Reset to start new threads
+    - Stored in your database for persistence
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Always Set Entity ID" icon="check">
+    Never share entity IDs across users. Each user should have a unique identifier.
+  </Card>
+
+  <Card title="Use Meaningful Process IDs" icon="tag">
+    Process IDs should describe the workflow (e.g., "onboarding", "checkout-flow").
+  </Card>
+
+  <Card title="Create Per-Request Instances" icon="refresh">
+    In web applications, create a new Memori instance for each request to avoid state leakage.
+  </Card>
+
+  <Card title="Store Session IDs" icon="database">
+    Save session IDs in your database to allow users to resume conversations.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming Responses" icon="wave-pulse" href="/examples/streaming">
+    Learn how to use Memori with streaming
+  </Card>
+  <Card title="Async Operations" icon="bolt" href="/examples/async-operations">
+    Handle async memory operations
+  </Card>
+</CardGroup>

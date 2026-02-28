@@ -1,0 +1,623 @@
+---
+title: Performance Tuning
+description: Optimize Memori for speed, efficiency, and cost-effectiveness
+---
+
+Memori is designed for high performance out of the box, but you can optimize it further for your specific workload. This guide covers configuration, best practices, and advanced techniques.
+
+## Performance Overview
+
+Memori's performance characteristics:
+
+- **Memory recall**: Less than 100ms typical latency for embeddings search
+- **Augmentation**: Asynchronous, zero added latency to LLM calls
+- **Embeddings**: Local model inference, no network calls
+- **Storage**: Optimized for both cloud and BYODB deployments
+
+## Configuration Options
+
+### Recall Settings
+
+These settings control memory recall performance and accuracy:
+
+```python
+from memori import Memori
+
+mem = Memori()
+
+# Embeddings search configuration
+mem.config.recall_embeddings_limit = 1000  # Max embeddings to search
+mem.config.recall_facts_limit = 5          # Max facts to include
+mem.config.recall_relevance_threshold = 0.1  # Minimum similarity score
+```
+
+#### recall_embeddings_limit
+
+**Default:** `1000`
+
+Controls the maximum number of embeddings to search during memory recall.
+
+- **Higher values**: More comprehensive search, potentially better recall, slower queries
+- **Lower values**: Faster queries, lower quota usage, potentially less accurate recall
+
+```python
+# For high-throughput applications
+mem.config.recall_embeddings_limit = 500
+
+# For maximum accuracy
+mem.config.recall_embeddings_limit = 5000
+```
+
+<Tip>
+**Recommended:** Start with 1000. Reduce to 500 if you need faster queries and have well-organized entity/process attribution. Increase to 2000+ only if recall accuracy is insufficient.
+</Tip>
+
+#### recall_facts_limit
+
+**Default:** `5`
+
+Maximum number of augmented facts to include in the context.
+
+- **Higher values**: More context, better LLM understanding, higher token costs
+- **Lower values**: Faster processing, lower costs, potentially less context
+
+```python
+# Minimize token usage
+mem.config.recall_facts_limit = 3
+
+# Maximize context
+mem.config.recall_facts_limit = 10
+```
+
+#### recall_relevance_threshold
+
+**Default:** `0.1`
+
+Minimum cosine similarity score (0-1) for memories to be included in recall.
+
+- **Higher values** (0.3-0.5): More selective, only highly relevant memories
+- **Lower values** (0.05-0.1): More inclusive, broader recall
+
+```python
+# Strict relevance filtering
+mem.config.recall_relevance_threshold = 0.3
+
+# Permissive recall
+mem.config.recall_relevance_threshold = 0.05
+```
+
+### Embedding Models
+
+Memori uses sentence-transformers models for local embedding generation. Choose based on your speed vs. accuracy requirements:
+
+| Model | Dimensions | Speed | Accuracy | Use Case |
+|-------|-----------|-------|----------|----------|
+| `all-MiniLM-L6-v2` | 384 | ⭐️⭐️⭐️ | ⭐️⭐️ | Default, fast, good quality |
+| `all-mpnet-base-v2` | 768 | ⭐️⭐️ | ⭐️⭐️⭐️ | Higher accuracy, slower |
+| `all-MiniLM-L12-v2` | 384 | ⭐️⭐️ | ⭐️⭐️ | Balanced option |
+
+**Configure via environment variable:**
+
+```bash
+# Fast and efficient (default)
+export MEMORI_EMBEDDINGS_MODEL="all-MiniLM-L6-v2"
+
+# Best accuracy
+export MEMORI_EMBEDDINGS_MODEL="all-mpnet-base-v2"
+
+# Install the model
+python -m memori setup
+```
+
+**Or programmatically:**
+
+```python
+from memori import Memori
+
+mem = Memori()
+mem.config.embeddings.model = "all-mpnet-base-v2"
+```
+
+<Warning>
+Changing embedding models requires recomputing all existing embeddings. This is handled automatically but may cause a temporary performance impact. Stick with one model in production.
+</Warning>
+
+### Thread Pool Configuration
+
+Memori uses a thread pool for parallel operations:
+
+```python
+from memori import Memori
+from concurrent.futures import ThreadPoolExecutor
+
+mem = Memori()
+
+# Adjust thread pool size (default: 15)
+mem.config.thread_pool_executor = ThreadPoolExecutor(max_workers=25)
+```
+
+**Guidelines:**
+- **CPU-bound workloads**: Set to number of CPU cores
+- **I/O-bound workloads**: Can use 2-4x CPU cores
+- **Default (15)**: Good for most use cases
+
+### Session Timeout
+
+Control how long sessions remain active:
+
+```python
+mem.config.session_timeout_minutes = 30  # Default
+
+# Shorter timeout for high-frequency interactions
+mem.config.session_timeout_minutes = 10
+
+# Longer timeout for slow-paced conversations
+mem.config.session_timeout_minutes = 120
+```
+
+## Database Optimization
+
+### BYODB Performance Tuning
+
+When using Memori BYODB, database performance is critical.
+
+#### PostgreSQL Optimization
+
+```sql
+-- Enable parallel query execution
+SET max_parallel_workers_per_gather = 4;
+SET max_parallel_workers = 8;
+
+-- Optimize for embeddings search
+CREATE INDEX CONCURRENTLY idx_embeddings_faiss 
+  ON memories USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 100);
+
+-- Optimize connection pooling
+SET max_connections = 100;
+SET shared_buffers = '256MB';
+SET effective_cache_size = '1GB';
+```
+
+#### Connection Pooling
+
+Use connection pooling to reduce connection overhead:
+
+```python
+from memori import Memori
+import psycopg2.pool
+
+# Create a connection pool
+pool = psycopg2.pool.ThreadedConnectionPool(
+    minconn=5,
+    maxconn=20,
+    host="your-db-host",
+    database="memori",
+    user="your-user",
+    password="your-password"
+)
+
+# Use pooled connections
+mem = Memori().storage.register(pool.getconn())
+```
+
+#### Index Optimization
+
+Ensure proper indexes for fast queries:
+
+```sql
+-- Entity and process lookups
+CREATE INDEX idx_entity_id ON memories(entity_id);
+CREATE INDEX idx_process_id ON memories(process_id);
+CREATE INDEX idx_session_id ON memories(session_id);
+
+-- Composite index for common queries
+CREATE INDEX idx_entity_process ON memories(entity_id, process_id);
+
+-- Timestamp-based queries
+CREATE INDEX idx_created_at ON memories(created_at DESC);
+```
+
+### MongoDB Optimization
+
+```javascript
+// Create compound indexes
+db.memories.createIndex({ entity_id: 1, process_id: 1 });
+db.memories.createIndex({ session_id: 1, created_at: -1 });
+
+// Vector search index (Atlas Vector Search)
+db.memories.createIndex(
+  { embedding: "vectorSearch" },
+  {
+    "vectorSearchOptions": {
+      "dimension": 384,
+      "similarity": "cosine"
+    }
+  }
+);
+```
+
+### SQLite Optimization
+
+```python
+import sqlite3
+from memori import Memori
+
+connection = sqlite3.connect("memori.db")
+
+# Enable WAL mode for better concurrency
+connection.execute("PRAGMA journal_mode=WAL")
+
+# Increase cache size
+connection.execute("PRAGMA cache_size=-64000")  # 64MB
+
+# Optimize for memory operations
+connection.execute("PRAGMA synchronous=NORMAL")
+connection.execute("PRAGMA temp_store=MEMORY")
+
+mem = Memori().storage.register(connection)
+```
+
+## Async Operations
+
+Memori supports async LLM clients for better concurrency:
+
+```python
+import asyncio
+from memori import Memori
+from openai import AsyncOpenAI
+
+async def main():
+    client = AsyncOpenAI()
+    mem = Memori().llm.register(client)
+    
+    mem.attribution(entity_id="user_123", process_id="async_agent")
+    
+    # Parallel LLM calls with memory
+    tasks = [
+        client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": f"Query {i}"}]
+        )
+        for i in range(10)
+    ]
+    
+    responses = await asyncio.gather(*tasks)
+    return responses
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+<Tip>
+Async operations significantly improve throughput for high-concurrency applications. Use `AsyncOpenAI`, `AsyncAnthropic`, etc., for best performance.
+</Tip>
+
+## Streaming Optimization
+
+For streaming responses, Memori processes chunks efficiently:
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI()
+mem = Memori().llm.register(client)
+
+mem.attribution(entity_id="user_123", process_id="streaming_agent")
+
+stream = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Tell me a story"}],
+    stream=True
+)
+
+# Stream to user immediately, Memori records in background
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+**Performance characteristics:**
+- No added latency to first token
+- Background memory recording
+- Automatic chunk buffering and processing
+
+## Caching Strategies
+
+### Client-Side Caching
+
+Cache frequently accessed memories:
+
+```python
+from functools import lru_cache
+from memori import Memori
+
+mem = Memori()
+
+@lru_cache(maxsize=128)
+def get_user_context(entity_id: str, process_id: str):
+    """Cache user context to avoid repeated API calls"""
+    mem.attribution(entity_id=entity_id, process_id=process_id)
+    # Context is automatically recalled
+    return mem.config.cache
+
+# First call: fetches from Memori
+context = get_user_context("user_123", "support_agent")
+
+# Subsequent calls: returned from cache
+context = get_user_context("user_123", "support_agent")
+```
+
+### Session Reuse
+
+Reuse sessions for related interactions:
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+mem = Memori()
+client = mem.llm.register(OpenAI())
+
+mem.attribution(entity_id="user_123", process_id="agent")
+
+# Get current session ID
+session_id = mem.config.session_id
+
+# Process multiple messages in same session
+for message in user_messages:
+    mem.set_session(session_id)  # Reuse session
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": message}]
+    )
+
+# Start new session for new topic
+mem.new_session()
+```
+
+## Benchmarking
+
+Measure Memori's performance impact:
+
+```python
+import time
+from memori import Memori
+from openai import OpenAI
+
+def benchmark_with_memori():
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+    mem.attribution(entity_id="benchmark", process_id="test")
+    
+    start = time.time()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+    elapsed = time.time() - start
+    
+    print(f"With Memori: {elapsed:.3f}s")
+    return elapsed
+
+def benchmark_without_memori():
+    client = OpenAI()
+    
+    start = time.time()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+    elapsed = time.time() - start
+    
+    print(f"Without Memori: {elapsed:.3f}s")
+    return elapsed
+
+# Run benchmarks
+with_memori = benchmark_with_memori()
+without_memori = benchmark_without_memori()
+overhead = with_memori - without_memori
+
+print(f"\nMemori overhead: {overhead*1000:.1f}ms ({(overhead/without_memori)*100:.1f}%)")
+```
+
+**Typical results:**
+- Memori Cloud: Less than 50ms overhead
+- Memori BYODB (local DB): Less than 20ms overhead
+- Memori BYODB (remote DB): Less than 100ms overhead
+
+## Memory-Efficient Patterns
+
+### Batch Processing
+
+Process multiple items efficiently:
+
+```python
+import asyncio
+from memori import Memori
+from openai import AsyncOpenAI
+
+async def process_batch(items, batch_size=10):
+    client = AsyncOpenAI()
+    mem = Memori().llm.register(client)
+    
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i+batch_size]
+        
+        # Process batch in parallel
+        tasks = [
+            client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": item}]
+            )
+            for item in batch
+        ]
+        
+        results = await asyncio.gather(*tasks)
+        
+        # Small delay between batches
+        await asyncio.sleep(0.1)
+    
+    return results
+
+# Process 100 items in batches of 10
+items = [f"Item {i}" for i in range(100)]
+results = asyncio.run(process_batch(items, batch_size=10))
+```
+
+### Lazy Loading
+
+Defer initialization until needed:
+
+```python
+from memori import Memori
+from openai import OpenAI
+
+class Agent:
+    def __init__(self):
+        self._memori = None
+        self._client = None
+    
+    @property
+    def memori(self):
+        if self._memori is None:
+            self._memori = Memori()
+        return self._memori
+    
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = self.memori.llm.register(OpenAI())
+        return self._client
+    
+    def process(self, message):
+        # Memori initialized only when first used
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": message}]
+        )
+        return response
+```
+
+## Production Optimization Checklist
+
+<Steps>
+
+<Step title="Configure recall settings">
+  Set optimal recall limits for your use case:
+  ```python
+  mem.config.recall_embeddings_limit = 1000
+  mem.config.recall_facts_limit = 5
+  mem.config.recall_relevance_threshold = 0.1
+  ```
+</Step>
+
+<Step title="Choose the right embedding model">
+  Balance speed vs. accuracy:
+  ```bash
+  export MEMORI_EMBEDDINGS_MODEL="all-MiniLM-L6-v2"
+  ```
+</Step>
+
+<Step title="Optimize database performance">
+  - Create proper indexes
+  - Use connection pooling
+  - Configure database-specific optimizations
+</Step>
+
+<Step title="Use async clients for concurrency">
+  ```python
+  from openai import AsyncOpenAI
+  client = AsyncOpenAI()
+  mem = Memori().llm.register(client)
+  ```
+</Step>
+
+<Step title="Implement caching">
+  Cache frequently accessed data and reuse sessions.
+</Step>
+
+<Step title="Monitor and benchmark">
+  Track performance metrics and optimize bottlenecks.
+</Step>
+
+</Steps>
+
+## Troubleshooting Performance Issues
+
+### Slow Memory Recall
+
+<Accordion title="Memory recall takes >500ms">
+
+**Symptoms:** High latency during memory recall operations.
+
+**Solutions:**
+1. Reduce `recall_embeddings_limit`:
+   ```python
+   mem.config.recall_embeddings_limit = 500
+   ```
+2. Check database indexes are created
+3. Use connection pooling for BYODB
+4. Increase `recall_relevance_threshold` to filter more aggressively
+5. Verify database server performance (CPU, memory, disk I/O)
+
+</Accordion>
+
+### High Memory Usage
+
+<Accordion title="Application using excessive RAM">
+
+**Symptoms:** High memory consumption by the application.
+
+**Solutions:**
+1. Reduce thread pool size:
+   ```python
+   from concurrent.futures import ThreadPoolExecutor
+   mem.config.thread_pool_executor = ThreadPoolExecutor(max_workers=5)
+   ```
+2. Use a smaller embedding model:
+   ```bash
+   export MEMORI_EMBEDDINGS_MODEL="all-MiniLM-L6-v2"
+   ```
+3. Process in batches rather than loading all data at once
+4. Implement lazy loading patterns
+
+</Accordion>
+
+### Database Connection Issues
+
+<Accordion title="Connection timeouts or pool exhaustion">
+
+**Symptoms:** Frequent connection errors or timeouts.
+
+**Solutions:**
+1. Implement connection pooling:
+   ```python
+   pool = psycopg2.pool.ThreadedConnectionPool(minconn=5, maxconn=20, ...)
+   ```
+2. Increase connection timeout:
+   ```python
+   mem.config.request_secs_timeout = 10  # Default: 5
+   ```
+3. Reduce concurrent operations
+4. Check database server connection limits
+
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quota Management" icon="chart-line" href="/advanced/quota-management">
+    Monitor and optimize your memory quota
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/advanced/troubleshooting">
+    Solve common issues and errors
+  </Card>
+  <Card title="BYODB Setup" icon="database" href="/byodb/quick-start">
+    Deploy with full database control
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Complete API documentation
+  </Card>
+</CardGroup>

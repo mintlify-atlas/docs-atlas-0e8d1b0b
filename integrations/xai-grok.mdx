@@ -1,0 +1,305 @@
+---
+title: xAI Grok Integration
+description: Add persistent memory to xAI Grok models with Memori - supports sync, async, and streaming.
+---
+
+# xAI Grok Integration
+
+Memori integrates with xAI's Grok models through OpenAI-compatible clients. Simply configure the OpenAI client with xAI's base URL and Memori handles the rest.
+
+## Installation
+
+```bash
+pip install memori openai
+```
+
+## Quick Start
+
+<CodeGroup>
+
+```python {{ title: 'Sync' }}
+import os
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+# Register the xAI client with Memori
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="grok_assistant")
+
+response = client.chat.completions.create(
+    model="grok-2-latest",
+    messages=[{"role": "user", "content": "Hello! My name is Alice."}]
+)
+print(response.choices[0].message.content)
+```
+
+```python {{ title: 'Async' }}
+import os
+import asyncio
+from memori import Memori
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="grok_assistant")
+
+async def main():
+    response = await client.chat.completions.create(
+        model="grok-2-latest",
+        messages=[{"role": "user", "content": "Hello! My name is Alice."}]
+    )
+    print(response.choices[0].message.content)
+
+asyncio.run(main())
+```
+
+```python {{ title: 'Streaming' }}
+import os
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="grok_assistant")
+
+stream = client.chat.completions.create(
+    model="grok-2-latest",
+    messages=[{"role": "user", "content": "Tell me a story"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")
+```
+
+</CodeGroup>
+
+## Using the xAI SDK
+
+For native xAI SDK support (when available), Memori provides direct integration:
+
+```python
+import os
+from memori import Memori
+try:
+    from xai_sdk import Client
+    
+    client = Client(api_key=os.getenv("XAI_API_KEY"))
+    
+    mem = Memori().llm.register(client)
+    mem.attribution(entity_id="user_123", process_id="xai_native")
+    
+    chat = client.chat.create(
+        model="grok-3",
+        messages=[{"role": "user", "content": "Hello!"}]
+    )
+    
+    response = chat.respond()
+    print(response.content)
+except ImportError:
+    print("xAI SDK not installed. Use OpenAI-compatible client instead.")
+```
+
+## Multi-Turn Conversations
+
+Memori automatically tracks conversation history with Grok:
+
+```python
+import os
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_456", process_id="conversation")
+
+messages = [
+    {"role": "user", "content": "I'm building an AI agent with memory."}
+]
+
+# First turn
+response = client.chat.completions.create(
+    model="grok-2-latest",
+    messages=messages
+)
+messages.append({
+    "role": "assistant",
+    "content": response.choices[0].message.content
+})
+
+# Second turn - Memori maintains context
+messages.append({
+    "role": "user",
+    "content": "What technologies should I use for that?"
+})
+response = client.chat.completions.create(
+    model="grok-2-latest",
+    messages=messages
+)
+print(response.choices[0].message.content)
+```
+
+## System Prompts
+
+Grok supports system-level instructions:
+
+```python
+import os
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="dev_001", process_id="code_assistant")
+
+response = client.chat.completions.create(
+    model="grok-2-latest",
+    messages=[
+        {"role": "system", "content": "You are a helpful coding assistant. Provide concise, production-ready code."},
+        {"role": "user", "content": "Write a Python function to validate URLs"}
+    ]
+)
+print(response.choices[0].message.content)
+```
+
+## Function Calling
+
+Grok supports function calling through the OpenAI-compatible interface:
+
+```python
+import os
+import json
+from memori import Memori
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="user_123", process_id="tools")
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stock_price",
+            "description": "Get the current stock price",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Stock symbol"}
+                },
+                "required": ["symbol"]
+            }
+        }
+    }
+]
+
+response = client.chat.completions.create(
+    model="grok-2-latest",
+    messages=[{"role": "user", "content": "What's the price of TSLA?"}],
+    tools=tools
+)
+
+for tool_call in response.choices[0].message.tool_calls or []:
+    print(f"Function: {tool_call.function.name}")
+    print(f"Arguments: {tool_call.function.arguments}")
+```
+
+## Supported Features
+
+| Feature              | Support | Method                                   |
+| -------------------- | ------- | ---------------------------------------- |
+| **Sync Client**      | ✓       | `OpenAI(base_url=...)`                   |
+| **Async Client**     | ✓       | `AsyncOpenAI(base_url=...)`              |
+| **Streaming**        | ✓       | `stream=True`                            |
+| **System Prompts**   | ✓       | System role messages                     |
+| **Function Calling** | ✓       | `tools` parameter                        |
+| **Native SDK**       | ✓       | `xai_sdk.Client` (when available)        |
+| **JSON Mode**        | ✓       | `response_format={"type": "json_object"}` |
+
+## How It Works
+
+When you register an xAI client with Memori:
+
+1. Memori detects the xAI base URL or native SDK
+2. Wraps the completion methods transparently
+3. Captures all requests and responses
+4. Stores conversations in your Memori memory store
+5. Builds a knowledge graph from conversation patterns
+6. Preserves original API behavior
+
+<Note>
+xAI's API is OpenAI-compatible, so you can use the standard `openai` package with a custom `base_url`. Memori automatically detects xAI endpoints.
+</Note>
+
+## Model Support
+
+Memori works with all xAI Grok models:
+
+- **Grok 2** (grok-2-latest, grok-2-1212)
+- **Grok 3** (grok-3)
+- **Future Grok models** (automatic support)
+
+## Real-World Example
+
+```python
+import os
+from memori import Memori
+from openai import OpenAI
+
+# Initialize xAI client with Memori
+client = OpenAI(
+    base_url="https://api.x.ai/v1",
+    api_key=os.getenv("XAI_API_KEY")
+)
+
+mem = Memori().llm.register(client)
+mem.attribution(entity_id="customer_789", process_id="support_bot")
+
+# Multi-turn support conversation
+messages = []
+
+# Customer inquiry
+messages.append({"role": "user", "content": "I need help resetting my password"})
+response = client.chat.completions.create(model="grok-2-latest", messages=messages)
+messages.append({"role": "assistant", "content": response.choices[0].message.content})
+
+# Follow-up
+messages.append({"role": "user", "content": "I don't have access to my email anymore"})
+response = client.chat.completions.create(model="grok-2-latest", messages=messages)
+messages.append({"role": "assistant", "content": response.choices[0].message.content})
+
+# Memori has captured the entire conversation
+print("Conversation stored in Memori for future reference")
+```
+
+## Next Steps
+
+- Learn about [Memory Retrieval](/concepts/how-memory-works)
+- Explore [Multi-User Support](/concepts/multi-user-support)
+- Compare with [OpenAI Integration](/integrations/openai)

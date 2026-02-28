@@ -1,0 +1,202 @@
+---
+title: Dashboard Features
+description: An overview of the Memori Cloud dashboard at app.memorilabs.ai for managing API keys, testing memories, and monitoring usage.
+---
+
+# Dashboard Overview
+
+The Memori Cloud dashboard at [app.memorilabs.ai](https://app.memorilabs.ai) is where you manage API keys, test memory in real-time, and monitor usage.
+
+## Dashboard Sections
+
+### API Keys
+
+Create and manage your Memori API keys. The free plan unlocks 5,000 memories created and 15,000 recalled per month.
+
+<Steps>
+  <Step title="Create a New API Key">
+    1. Open **API keys** in the dashboard sidebar
+    2. Click **Create API key**
+    3. Enter a descriptive name
+    4. Click **Create key**
+  </Step>
+  
+  <Step title="Copy the Key">
+    The full key value is shown only once. Copy it and store it securely before clicking **Continue**.
+    
+    <Note>
+      Never commit API keys to version control. Treat API keys like passwords.
+    </Note>
+  </Step>
+  
+  <Step title="Set as Environment Variable">
+    ```bash
+    export MEMORI_API_KEY="your-memori-api-key"
+    ```
+  </Step>
+</Steps>
+
+![API keys page with table and new API key modal](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/new-api-key-modal.webp)
+
+### Playground
+
+Chat with an AI and watch memories get extracted in real-time. The fastest way to understand how Memori works.
+
+**Playground Layout:**
+
+- **Left navigation:** Memories, API keys, Playground, Documentation, Settings
+- **Center panel:** Playground conversation and composer
+- **Right column:** Memory usage, Extracted memories, Memory graph with expand
+
+![Playground overview with conversation, memory usage, and memory graph](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/playground-memory-graph-expanded.webp)
+
+**Core Workflow:**
+
+<Steps>
+  <Step title="Chat in Playground">
+    Enter user details or preferences in the conversation.
+  </Step>
+  
+  <Step title="Watch Memory Extraction">
+    New records appear in **Extracted memories** as you chat.
+  </Step>
+  
+  <Step title="Verify in Graph">
+    See the same facts and relationships visualized in **Memory graph**.
+  </Step>
+  
+  <Step title="Expand for Details">
+    Use the graph expand control for deeper inspection when needed.
+  </Step>
+</Steps>
+
+**Memory Graph Features:**
+
+- **Nodes** represent subjects and entities (e.g., `User`, `Emma`, `Queens`, `NYC Juniors`)
+- **Edges** show relation text (e.g., `has name`, `lives in`, `plays as`)
+- **Expand icon** opens a larger graph canvas for detailed exploration
+
+![Extracted memories panel showing normalized memory statements](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/playground-extracted-memories.webp)
+
+### Memories
+
+Explore all memories created by your applications and agents with two view modes:
+
+**Table View:**
+
+- **Memories tab:** Individual memory rows with summary, entity ID, recalls, mentions, and timestamps
+- **Subjects tab:** Extracted entities/subjects with type filters and memory counts
+- **Semantic search:** Find relevant rows quickly
+
+![Memories table view with semantic search](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/memories-overview-table.webp)
+
+**Knowledge Graph View:**
+
+- **Entities tab:** Explore nodes and relationships visually
+- **Search and filter:** By time range and semantic queries
+- **Associated memories:** Trace back from entities to source memories
+
+![Entities knowledge graph view](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/entities-knowledge-graph.webp)
+
+**Memory Details Panel:**
+
+Click any memory row to see:
+
+- Memory ID
+- Entity ID
+- Importance score
+- Created at
+- Last retrieved
+- Recalls count
+- Number of mentions
+- Associated subjects graph
+
+### Analytics
+
+Monitor memory creation, recall activity, traffic trends, and quota usage.
+
+**Key Metrics:**
+
+| Metric                      | Description                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| **Total memories created**  | Total number of memory records created in the selected time range             |
+| **Total entities**          | Number of unique extracted entities attached to memories                      |
+| **Total memories recalled** | Number of memory retrieval events served                                      |
+| **Cache hit rate**          | Percentage of recall requests served from cache                               |
+| **Total conversations**     | Number of conversation threads processed by Memori                            |
+| **Total sessions**          | Number of distinct sessions in the selected range                             |
+| **Total users**             | Number of distinct end users represented by tracked entities/sessions         |
+| **Monthly quota**           | Current month usage vs monthly plan limit for created and recalled memories   |
+| **Top subjects**            | Ranked subjects/entities by memory volume with entity type tags               |
+
+![Analytics page with KPI cards, activity chart, and monthly usage](https://s3.us-east-1.amazonaws.com/images.memorilabs.ai/docs/analytics-overview.webp)
+
+**How to Read Analytics:**
+
+<Steps>
+  <Step title="Check KPI Cards">
+    Start with the top KPI cards to understand overall volume and retrieval load.
+  </Step>
+  
+  <Step title="Review Activity Trends">
+    Check **Activity and performance** for traffic trends and directional changes (up/down percentages).
+  </Step>
+  
+  <Step title="Monitor Quota Usage">
+    Review **Monthly usage** to confirm distance from quota limits.
+  </Step>
+  
+  <Step title="Identify Top Subjects">
+    Use **Top subjects** to see which entities dominate memory creation.
+  </Step>
+</Steps>
+
+## Memory Usage Plans
+
+| Plan                    | Memories Created / month | Memories Recalled / month | Requirements                                            |
+| ----------------------- | ------------------------ | ------------------------- | ------------------------------------------------------- |
+| **Free (with API key)** | 5,000                    | 15,000                    | Sign up and create an API key at app.memorilabs.ai     |
+| **Starter**             | 25,000                   | 100,000                   | Sign up and subscribe                                   |
+| **Pro**                 | 150,000                  | 500,000                   | Sign up and subscribe                                   |
+| **Enterprise**          | Custom                   | Custom                    | Contact sales                                           |
+
+## Getting Started with the Dashboard
+
+<Steps>
+  <Step title="Sign Up">
+    Go to [app.memorilabs.ai](https://app.memorilabs.ai) and create an account.
+  </Step>
+  
+  <Step title="Create an API Key">
+    Navigate to API Keys and generate your first key.
+  </Step>
+  
+  <Step title="Try the Playground">
+    Chat with an AI and see memories being extracted live.
+  </Step>
+  
+  <Step title="Integrate">
+    Copy your API key into your application code.
+    
+    ```python
+    import os
+    from memori import Memori
+    from openai import OpenAI
+    
+    client = OpenAI()
+    mem = Memori().llm.register(client)
+    mem.attribution(entity_id="user_123", process_id="my-agent")
+    ```
+  </Step>
+</Steps>
+
+## Security Best Practices
+
+<Note>
+  **Never commit API keys to version control.** Treat API keys like passwords.
+</Note>
+
+- Store keys in environment variables or a secure secrets manager
+- Rotate keys immediately if you suspect exposure
+- Use separate keys for development, staging, and production
+- Monitor the **Last used** column to detect unauthorized usage

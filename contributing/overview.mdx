@@ -1,0 +1,436 @@
+---
+title: Contributing Overview
+description: How to contribute to the Memori Python SDK
+---
+
+Thank you for your interest in contributing to Memori! We welcome contributions from the community to help make Memori better for everyone.
+
+## Why Contribute?
+
+Memori is the memory fabric for enterprise AI, and your contributions help:
+
+- ✅ Improve memory quality and accuracy
+- ✅ Add support for new LLM providers and databases
+- ✅ Fix bugs and improve performance
+- ✅ Enhance documentation
+- ✅ Build a better developer experience
+
+## Ways to Contribute
+
+### Code Contributions
+
+<CardGroup cols={2}>
+  <Card title="Bug Fixes" icon="bug">
+    Fix issues reported in GitHub Issues or discovered during your own usage.
+  </Card>
+  <Card title="New Features" icon="sparkles">
+    Add support for new LLM providers, database adapters, or framework integrations.
+  </Card>
+  <Card title="Performance" icon="gauge-high">
+    Optimize memory recall, embeddings, or database queries.
+  </Card>
+  <Card title="Tests" icon="vial">
+    Improve test coverage or add integration tests.
+  </Card>
+</CardGroup>
+
+### Non-Code Contributions
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book">
+    Improve guides, add examples, or fix typos.
+  </Card>
+  <Card title="Examples" icon="code">
+    Create cookbook recipes or integration examples.
+  </Card>
+  <Card title="Bug Reports" icon="triangle-exclamation">
+    Report issues with detailed reproduction steps.
+  </Card>
+  <Card title="Feature Requests" icon="lightbulb">
+    Suggest new features or improvements.
+  </Card>
+</CardGroup>
+
+## Project Overview
+
+Memori is a Python SDK for adding memory to LLM applications. Here's how it's structured:
+
+### Repository Structure
+
+```
+memori/              # SDK source code
+  ├── llm/               # LLM provider integrations
+  │   ├── clients/       # OpenAI, Anthropic, Google, etc.
+  │   └── frameworks/    # LangChain, Agno, etc.
+  ├── memory/            # Memory system and augmentation
+  │   ├── augmentation/  # Advanced Augmentation (facts, preferences, etc.)
+  │   └── recall/        # Memory recall logic
+  ├── storage/           # Storage adapters
+  │   ├── adapters/      # DB-API, Django, SQLAlchemy, MongoDB
+  │   └── drivers/       # PostgreSQL, MySQL, SQLite, MongoDB, Oracle
+  ├── api/               # API client for Memori Cloud
+  └── __init__.py        # Main Memori class
+
+tests/               # Test files
+  ├── llm/               # LLM provider tests
+  ├── memory/            # Memory system tests
+  ├── storage/           # Storage adapter tests
+  └── integration/       # Integration tests (requires API keys)
+
+examples/            # Example projects
+  ├── postgres/          # PostgreSQL example
+  ├── mongodb/           # MongoDB example
+  ├── cockroachdb/       # CockroachDB example
+  └── agno/              # Agno framework example
+
+docs/                # Documentation
+pyproject.toml       # Project metadata and dependencies
+CONTRIBUTING.md      # This guide
+CHANGELOG.md         # Version history
+```
+
+### Technology Stack
+
+- **Python 3.10+** - Modern Python with type hints
+- **uv** - Fast dependency management
+- **pytest** - Testing framework
+- **Ruff** - Linting and formatting
+- **sentence-transformers** - Embeddings generation
+- **faiss** - Vector similarity search
+- **Docker** - Development and integration testing environment
+
+## Supported Integrations
+
+### LLM Providers
+
+Memori currently supports:
+
+- **OpenAI** - Chat Completions & Responses API
+- **Anthropic** - Claude models
+- **Google** - Gemini models
+- **AWS Bedrock** - Multiple providers
+- **Grok (xAI)** - Grok models
+
+All support sync/async and streaming modes.
+
+### Frameworks
+
+- **Agno** - Agent framework integration
+- **LangChain** - LangChain integration
+
+### Database Adapters
+
+- **PostgreSQL** (psycopg2, psycopg3)
+- **MySQL / MariaDB** (pymysql)
+- **MongoDB** (pymongo)
+- **SQLite** (stdlib)
+- **Oracle** (cx_Oracle, python-oracledb)
+- **CockroachDB** (PostgreSQL-compatible)
+- **Neon, Supabase** (PostgreSQL-compatible)
+- **OceanBase**
+- **Django ORM**
+- **SQLAlchemy**
+- **DB-API 2.0** compatible connections
+
+## Development Philosophy
+
+We follow these principles:
+
+### KISS (Keep It Simple, Stupid)
+
+Lean, simple code is preferred over complex solutions. If there's a simpler way, use it.
+
+```python
+# Good: Simple and clear
+def get_entity_id(config):
+    return config.entity_id
+
+# Avoid: Unnecessary complexity
+def get_entity_id(config):
+    return config.entity_id if hasattr(config, 'entity_id') and \
+           config.entity_id is not None else None
+```
+
+### YAGNI (You Aren't Gonna Need It)
+
+Don't add functionality until it's actually needed. Focus on the current requirements.
+
+### Self-Documenting Code
+
+Code should be clear enough to understand without comments. Use:
+- Descriptive variable and function names
+- Type hints
+- Docstrings for public APIs only
+
+```python
+# Good: Clear and self-documenting
+def calculate_cosine_similarity(embedding_a: np.ndarray, embedding_b: np.ndarray) -> float:
+    return np.dot(embedding_a, embedding_b) / (
+        np.linalg.norm(embedding_a) * np.linalg.norm(embedding_b)
+    )
+
+# Avoid: Requires comments to understand
+def calc(a, b):  # calculates cosine similarity
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+```
+
+### Type Safety
+
+All public APIs must have type hints:
+
+```python
+from typing import Optional
+
+def recall_memories(
+    entity_id: str,
+    process_id: str,
+    limit: int = 10,
+    threshold: float = 0.1
+) -> list[dict]:
+    ...
+```
+
+## Code Standards
+
+We use [Ruff](https://docs.astral.sh/ruff/) for linting and formatting:
+
+- **Line length**: 88 characters (Black-compatible)
+- **Python version**: 3.10+ syntax
+- **Style**: PEP 8 compliant
+- **Import order**: Managed by Ruff
+
+### Running Code Quality Checks
+
+```bash
+# Format code
+uv run ruff format .
+
+# Check linting
+uv run ruff check .
+
+# Auto-fix issues
+uv run ruff check --fix .
+
+# Run security scans
+uv run bandit -r memori -ll -ii
+uv run pip-audit --require-hashes --disable-pip || true
+```
+
+## Testing Requirements
+
+All code changes must include tests:
+
+### Unit Tests
+
+Fast tests that use mocks, no external dependencies:
+
+```bash
+uv run pytest
+```
+
+### Integration Tests
+
+Tests that require real databases and LLM API keys:
+
+```bash
+# Set required API keys in .env
+cp .env.example .env
+
+# Initialize database
+make init-postgres  # or init-mysql, init-mongodb, etc.
+
+# Run integration tests
+MEMORI_TEST_MODE=1 uv run pytest tests/integration/
+```
+
+### Coverage Requirements
+
+We maintain high test coverage:
+
+```bash
+# Run with coverage report
+uv run pytest --cov=memori
+
+# View HTML report
+open htmlcov/index.html
+```
+
+<Tip>
+Aim for >80% coverage for new code. Critical paths (memory recall, LLM integration) should have >95% coverage.
+</Tip>
+
+## Pull Request Process
+
+<Steps>
+
+<Step title="Fork and clone">
+  ```bash
+  git clone https://github.com/YOUR_USERNAME/Memori.git
+  cd Memori
+  ```
+</Step>
+
+<Step title="Create a feature branch">
+  ```bash
+  git checkout -b feature/your-feature-name
+  ```
+  
+  Branch naming conventions:
+  - `feature/` - New features
+  - `fix/` - Bug fixes
+  - `docs/` - Documentation updates
+  - `perf/` - Performance improvements
+</Step>
+
+<Step title="Set up development environment">
+  See [Development Setup](/contributing/development-setup) for detailed instructions.
+</Step>
+
+<Step title="Make your changes">
+  - Write code following our standards
+  - Add/update tests
+  - Update documentation if needed
+  - Update CHANGELOG.md under "Unreleased" section
+</Step>
+
+<Step title="Run quality checks">
+  ```bash
+  # Format and lint
+  uv run ruff format .
+  uv run ruff check .
+  
+  # Run tests
+  uv run pytest
+  
+  # Security scan
+  uv run bandit -r memori -ll -ii
+  ```
+</Step>
+
+<Step title="Commit your changes">
+  ```bash
+  git add .
+  git commit -m "feat: add support for XYZ provider"
+  ```
+  
+  Use [Conventional Commits](https://www.conventionalcommits.org/):
+  - `feat:` - New feature
+  - `fix:` - Bug fix
+  - `docs:` - Documentation
+  - `perf:` - Performance improvement
+  - `refactor:` - Code refactoring
+  - `test:` - Add/update tests
+</Step>
+
+<Step title="Push and create PR">
+  ```bash
+  git push origin feature/your-feature-name
+  ```
+  
+  Then open a Pull Request on GitHub with:
+  - Clear description of changes
+  - Link to related issues
+  - Screenshots/examples if applicable
+</Step>
+
+<Step title="Code review">
+  - Respond to feedback
+  - Make requested changes
+  - Keep commits focused and clean
+</Step>
+
+</Steps>
+
+## Contribution Guidelines
+
+### Do's ✅
+
+- Follow PEP 8 and our code standards
+- Write tests for all new code
+- Keep commits atomic and well-described
+- Update documentation for new features
+- Add entries to CHANGELOG.md
+- Use type hints for all public APIs
+- Run pre-commit hooks before pushing
+
+### Don'ts ❌
+
+- Don't submit PRs with failing tests
+- Don't mix multiple unrelated changes in one PR
+- Don't add dependencies without discussion
+- Don't break backward compatibility without consensus
+- Don't submit generated code without review
+- Don't ignore linting/formatting errors
+
+## First-Time Contributors
+
+New to open source? Here are some good first issues:
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book">
+    Fix typos, improve clarity, add examples
+  </Card>
+  <Card title="Tests" icon="vial">
+    Add test coverage for existing code
+  </Card>
+  <Card title="Examples" icon="code">
+    Create new cookbook recipes
+  </Card>
+  <Card title="Bug Fixes" icon="bug">
+    Look for issues labeled `good first issue`
+  </Card>
+</CardGroup>
+
+## Communication
+
+Join the conversation:
+
+- **Discord**: [discord.gg/abD4eGym6v](https://discord.gg/abD4eGym6v) - Chat with the community
+- **GitHub Issues**: [github.com/MemoriLabs/Memori/issues](https://github.com/MemoriLabs/Memori/issues) - Report bugs, request features
+- **GitHub Discussions**: Share ideas and ask questions
+- **Email**: [noc@memorilabs.ai](mailto:noc@memorilabs.ai) - Direct contact with the team
+
+## Recognition
+
+Contributors are recognized in:
+
+- The project's README
+- Release notes
+- GitHub's contributor graph
+- Our hearts ❤️
+
+## Code of Conduct
+
+We're committed to providing a welcoming and inclusive environment. Please:
+
+- Be respectful and constructive
+- Welcome newcomers
+- Focus on what's best for the community
+- Show empathy toward others
+
+Unacceptable behavior will not be tolerated.
+
+## License
+
+By contributing to Memori, you agree that your contributions will be licensed under the [Apache 2.0 License](https://github.com/MemoriLabs/Memori/blob/main/LICENSE).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Setup" icon="laptop-code" href="/contributing/development-setup">
+    Set up your development environment
+  </Card>
+  <Card title="Guidelines" icon="book-open" href="/contributing/guidelines">
+    Detailed contribution guidelines
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/MemoriLabs/Memori/issues">
+    Find issues to work on
+  </Card>
+  <Card title="Discord" icon="discord" href="https://discord.gg/abD4eGym6v">
+    Join the community
+  </Card>
+</CardGroup>
+
+---
+
+Thank you for contributing to Memori! Together, we're building the future of AI memory. 🧠✨
