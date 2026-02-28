@@ -1,0 +1,170 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Memori",
+  "projectDescription": "SQL Native Memory Layer for LLMs, AI Agents & Multi-Agent Systems",
+  "theme": "palm",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/how-memory-works",
+              "concepts/architecture",
+              "concepts/advanced-augmentation",
+              "concepts/knowledge-graph",
+              "concepts/multi-user-support",
+              "concepts/async-patterns"
+            ]
+          },
+          {
+            "group": "Memori Cloud",
+            "pages": [
+              "cloud/overview",
+              "cloud/installation",
+              "cloud/quick-start",
+              "cloud/dashboard"
+            ]
+          },
+          {
+            "group": "Memori BYODB",
+            "pages": [
+              "byodb/overview",
+              "byodb/installation",
+              "byodb/quick-start",
+              "byodb/databases"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Python SDK",
+            "pages": [
+              "api/python/memori",
+              "api/python/attribution",
+              "api/python/sessions",
+              "api/python/recall",
+              "api/python/embeddings"
+            ]
+          },
+          {
+            "group": "TypeScript SDK",
+            "pages": [
+              "api/typescript/memori",
+              "api/typescript/attribution",
+              "api/typescript/sessions",
+              "api/typescript/recall"
+            ]
+          },
+          {
+            "group": "LLM Integrations",
+            "pages": [
+              "integrations/openai",
+              "integrations/anthropic",
+              "integrations/google-gemini",
+              "integrations/xai-grok",
+              "integrations/aws-bedrock",
+              "integrations/langchain",
+              "integrations/agno",
+              "integrations/pydantic-ai"
+            ]
+          },
+          {
+            "group": "Database Adapters",
+            "pages": [
+              "databases/sqlite",
+              "databases/postgresql",
+              "databases/mysql",
+              "databases/mongodb",
+              "databases/cockroachdb",
+              "databases/oracle",
+              "databases/oceanbase"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Use Cases",
+            "pages": [
+              "guides/chatbots",
+              "guides/ai-agents",
+              "guides/multi-agent-systems",
+              "guides/copilots"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/basic-memory",
+              "examples/multi-user",
+              "examples/streaming",
+              "examples/async-operations",
+              "examples/custom-embeddings"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/cli-usage",
+              "advanced/quota-management",
+              "advanced/performance-tuning",
+              "advanced/troubleshooting"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/overview",
+              "contributing/development-setup",
+              "contributing/guidelines"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Structured memory layer for LLMs with automatic capture and recall",
+    "Advanced augmentation extracting facts, preferences, relationships, and events",
+    "Multi-database support (SQLite, PostgreSQL, MySQL, MongoDB, CockroachDB, Oracle, OceanBase)",
+    "LLM-agnostic integration (OpenAI, Anthropic, Google Gemini, xAI Grok, AWS Bedrock)",
+    "Framework support for LangChain, Agno, and Pydantic AI",
+    "Semantic search with intelligent memory ranking and decay",
+    "Two deployment options: Memori Cloud (managed) and BYODB (self-hosted)",
+    "Knowledge graph for entity relationships and contextual understanding",
+    "Multi-user support with entity and process attribution",
+    "Async memory processing with zero added latency"
+  ],
+  "publicApiSurface": [
+    "Memori() - Main SDK class for Python",
+    "Memori.attribution(entity_id, process_id) - Assign user and process IDs",
+    "Memori.llm.register(client) - Register LLM client wrapper",
+    "Memori.new_session() - Start new conversation session",
+    "Memori.set_session(id) - Resume existing session",
+    "Memori.recall(query, limit) - Manual memory retrieval",
+    "Memori.embed_texts(texts) - Generate embeddings",
+    "Memori.close() - Release database connections",
+    "python -m memori setup - CLI setup wizard",
+    "python -m memori quota - Check API quota",
+    "python -m memori sign-up - Create API account",
+    "@memorilabs/memori (TypeScript/npm) - TypeScript SDK package",
+    "LangChain ChatBedrock integration",
+    "Agno framework integration",
+    "Pydantic AI integration"
+  ]
+}
