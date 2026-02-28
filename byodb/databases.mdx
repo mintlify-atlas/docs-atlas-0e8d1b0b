@@ -223,13 +223,14 @@ mem = Memori(conn=get_connection)
 
 ### Django ORM
 
-For Django applications: use Django's native ORM integration.
+For Django applications, pass your Django database connection directly.
 
 ```python
+from django.db import connection
 from memori import Memori
 
-# Django ORM integration coming soon
-# Check the documentation for updates
+mem = Memori(conn=connection)
+mem.config.storage.build()
 ```
 
 ### MongoDB
